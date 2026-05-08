@@ -78,6 +78,12 @@ TEST_CASES: list[
     ({"poetry.lock": ""}, {}, {}, "poetry"),
     # Test pixi.toml
     ({"pixi.toml": ""}, {}, {}, "pixi"),
+    # Test environment.yml -> conda
+    ({"environment.yml": ""}, {}, {}, "conda"),
+    # Test environment.yaml -> conda
+    ({"environment.yaml": ""}, {}, {}, "conda"),
+    # Test active conda env -> conda
+    ({}, {"CONDA_DEFAULT_ENV": "myenv"}, {}, "conda"),
     # Test fallback to pip
     ({}, {}, {}, "pip"),
     # Test fallback to uv when running inside `uv run` / `uvx`
@@ -128,7 +134,9 @@ def test_infer_package_manager(
     # into the test. Start from a clean slate for the keys that
     # infer_package_manager inspects, then layer on env_vars.
     sanitized = {
-        k: v for k, v in os.environ.items() if k not in ("UV", "VIRTUAL_ENV")
+        k: v
+        for k, v in os.environ.items()
+        if k not in ("UV", "VIRTUAL_ENV", "CONDA_DEFAULT_ENV")
     }
     sanitized.update(env_vars)
 

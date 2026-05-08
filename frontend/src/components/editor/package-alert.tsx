@@ -106,8 +106,7 @@ export const PackageAlert: React.FC = () => {
     return null;
   }
 
-  const doesSupportVersioning =
-    userConfig.package_management.manager !== "pixi";
+  const doesSupportVersioning = true;
 
   if (isMissingPackageAlert(packageAlert)) {
     return (

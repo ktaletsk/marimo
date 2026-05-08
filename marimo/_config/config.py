@@ -261,7 +261,7 @@ class PackageManagementConfig(TypedDict):
     - `manager`: the package manager to use
     """
 
-    manager: Literal["pip", "rye", "uv", "poetry", "pixi"]
+    manager: Literal["pip", "rye", "uv", "poetry", "pixi", "conda"]
 
 
 CopilotMode = Literal["ask", "manual", "agent"]

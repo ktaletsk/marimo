@@ -56,6 +56,42 @@ def test_install_commands_for_pixi() -> None:
         ]
 
 
+def test_install_commands_for_conda() -> None:
+    with patch(
+        "marimo._cli.install_hints.infer_package_manager",
+        return_value="conda",
+    ):
+        assert get_install_commands("numpy pandas") == [
+            "conda install -y numpy pandas",
+            "python -m pip install numpy pandas",
+        ]
+
+
+def test_upgrade_commands_for_conda() -> None:
+    with patch(
+        "marimo._cli.install_hints.infer_package_manager",
+        return_value="conda",
+    ):
+        assert get_upgrade_commands("numpy") == [
+            "conda update -y numpy",
+            "python -m pip install --upgrade numpy",
+        ]
+
+
+def test_post_install_commands_conda() -> None:
+    with patch(
+        "marimo._cli.install_hints.infer_package_manager",
+        return_value="conda",
+    ):
+        assert get_post_install_commands(
+            "playwright install chromium",
+            module_fallback="python -m playwright install chromium",
+        ) == [
+            "conda run playwright install chromium",
+            "python -m playwright install chromium",
+        ]
+
+
 def test_install_commands_for_pip_only() -> None:
     with patch(
         "marimo._cli.install_hints.infer_package_manager",

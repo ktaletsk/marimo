@@ -21,6 +21,7 @@ _INSTALL_COMMAND_RULES: Final[tuple[CommandRule, ...]] = (
     CommandRule("uv", "project", "uv add {packages}"),
     CommandRule("uv", "any", "uv pip install {packages}"),
     CommandRule("pixi", "any", "pixi add {packages}"),
+    CommandRule("conda", "any", "conda install -y {packages}"),
     CommandRule("poetry", "any", "poetry add {packages}"),
     CommandRule("rye", "any", "rye add {packages}"),
     CommandRule("pip", "any", "python -m pip install {packages}"),
@@ -29,6 +30,7 @@ _INSTALL_COMMAND_RULES: Final[tuple[CommandRule, ...]] = (
 _POST_INSTALL_COMMAND_RULES: Final[tuple[CommandRule, ...]] = (
     CommandRule("uv", "project", "uv run {command}"),
     CommandRule("pixi", "any", "pixi run {command}"),
+    CommandRule("conda", "any", "conda run {command}"),
     CommandRule("poetry", "any", "poetry run {command}"),
     CommandRule("rye", "any", "rye run {command}"),
     CommandRule("pip", "any", "{module_fallback}"),
@@ -38,6 +40,7 @@ _UPGRADE_COMMAND_RULES: Final[tuple[CommandRule, ...]] = (
     CommandRule("uv", "project", "uv add --upgrade {packages}"),
     CommandRule("uv", "any", "uv pip install --upgrade {packages}"),
     CommandRule("pixi", "any", "pixi upgrade {packages}"),
+    CommandRule("conda", "any", "conda update -y {packages}"),
     CommandRule("poetry", "any", "poetry update --no-interaction {packages}"),
     CommandRule("rye", "any", "rye sync --update {packages}"),
     CommandRule("pip", "any", "python -m pip install --upgrade {packages}"),

@@ -7,6 +7,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from marimo._dependencies.dependencies import DependencyManager
+from marimo._runtime.packages.conda_package_manager import (
+    CondaCliPackageManager,
+    PixiPackageManager,
+)
 from marimo._runtime.packages.package_manager import LogCallback
 from marimo._runtime.packages.package_managers import create_package_manager
 from marimo._runtime.packages.pypi_package_manager import (
@@ -26,6 +30,8 @@ def test_create_package_managers() -> None:
     )
     assert isinstance(create_package_manager("rye"), RyePackageManager)
     assert isinstance(create_package_manager("uv"), UvPackageManager)
+    assert isinstance(create_package_manager("pixi"), PixiPackageManager)
+    assert isinstance(create_package_manager("conda"), CondaCliPackageManager)
 
     with pytest.raises(RuntimeError) as e:
         create_package_manager("foobar")
@@ -774,3 +780,106 @@ def test_pixi_list_packages_uses_utf8_encoding(mock_run: MagicMock):
     call_kwargs = mock_run.call_args[1]
     assert call_kwargs.get("encoding") == "utf-8"
     assert call_kwargs.get("text") is True
+
+
+# CondaCliPackageManager tests
+
+
+def test_conda_install_command_no_active_env() -> None:
+    pm = CondaCliPackageManager()
+    with patch.dict("os.environ", {}, clear=False) as env:
+        env.pop("CONDA_DEFAULT_ENV", None)
+        cmd = pm.install_command("numpy", upgrade=False)
+    assert cmd == ["conda", "install", "-y", "numpy"]
+
+
+def test_conda_install_command_with_active_env() -> None:
+    pm = CondaCliPackageManager()
+    with patch.dict("os.environ", {"CONDA_DEFAULT_ENV": "myenv"}):
+        cmd = pm.install_command("numpy pandas", upgrade=False)
+    assert cmd == ["conda", "install", "-n", "myenv", "-y", "numpy", "pandas"]
+
+
+def test_conda_install_command_upgrade_uses_update() -> None:
+    pm = CondaCliPackageManager()
+    with patch.dict("os.environ", {"CONDA_DEFAULT_ENV": "myenv"}):
+        cmd = pm.install_command("numpy", upgrade=True)
+    assert cmd == ["conda", "update", "-n", "myenv", "-y", "numpy"]
+
+
+async def test_conda_uninstall_command() -> None:
+    pm = CondaCliPackageManager()
+    captured: list[list[str]] = []
+
+    async def fake_run(
+        command: list[str], log_callback: LogCallback | None = None
+    ) -> bool:
+        del log_callback
+        captured.append(command)
+        return True
+
+    with (
+        patch.dict("os.environ", {"CONDA_DEFAULT_ENV": "myenv"}),
+        patch.object(pm, "run", side_effect=fake_run),
+    ):
+        result = await pm.uninstall("numpy")
+
+    assert result is True
+    assert captured == [["conda", "remove", "-n", "myenv", "-y", "numpy"]]
+
+
+def test_conda_list_packages() -> None:
+    import json as _json
+
+    pm = CondaCliPackageManager()
+    mock_output = _json.dumps(
+        [
+            {"name": "numpy", "version": "1.26.0"},
+            {"name": "pandas", "version": "2.1.0"},
+        ]
+    )
+    with (
+        patch.object(pm, "is_manager_installed", return_value=True),
+        patch(
+            "marimo._runtime.packages.conda_package_manager.subprocess.run"
+        ) as mock_run,
+        patch.dict("os.environ", {"CONDA_DEFAULT_ENV": "myenv"}),
+    ):
+        mock_run.return_value = MagicMock(returncode=0, stdout=mock_output)
+        packages = pm.list_packages()
+
+    assert [(p.name, p.version) for p in packages] == [
+        ("numpy", "1.26.0"),
+        ("pandas", "2.1.0"),
+    ]
+    args, kwargs = mock_run.call_args
+    assert args[0] == ["conda", "list", "-n", "myenv", "--json"]
+    assert kwargs.get("encoding") == "utf-8"
+
+
+def test_conda_list_packages_returns_empty_on_failure() -> None:
+    pm = CondaCliPackageManager()
+    with (
+        patch.object(pm, "is_manager_installed", return_value=True),
+        patch(
+            "marimo._runtime.packages.conda_package_manager.subprocess.run",
+            side_effect=__import__("subprocess").CalledProcessError(
+                returncode=1, cmd="conda"
+            ),
+        ),
+    ):
+        assert pm.list_packages() == []
+
+
+def test_conda_list_packages_returns_empty_when_not_installed() -> None:
+    pm = CondaCliPackageManager()
+    with patch.object(pm, "is_manager_installed", return_value=False):
+        assert pm.list_packages() == []
+
+
+def test_conda_module_to_package_uses_conda_mapping() -> None:
+    pm = CondaCliPackageManager()
+    # cv2 maps to opencv in the conda mapping (not opencv-python)
+    assert pm.module_to_package("cv2") == "opencv"
+    # Unknown modules fall back to underscore->dash
+    assert pm.module_to_package("my_pkg") == "my-pkg"

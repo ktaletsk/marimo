@@ -8,7 +8,7 @@ from typing import Literal
 
 from marimo._utils.toml import toml_reader
 
-PackageManagerKind = Literal["pip", "rye", "uv", "poetry", "pixi"]
+PackageManagerKind = Literal["pip", "rye", "uv", "poetry", "pixi", "conda"]
 
 
 def infer_package_manager() -> PackageManagerKind:
@@ -49,12 +49,22 @@ def infer_package_manager() -> PackageManagerKind:
         if (root_dir / "pixi.toml").exists():
             return "pixi"
 
+        # misc - Check for environment.yml (conda)
+        if (root_dir / "environment.yml").exists() or (
+            root_dir / "environment.yaml"
+        ).exists():
+            return "conda"
+
         # misc - Check for virtualenv/pip
         VIRTUAL_ENV = os.environ.get("VIRTUAL_ENV", "")
 
         # Check for '/uv/' in VIRTUAL_ENV
         if (os.path.sep + "uv" + os.path.sep) in VIRTUAL_ENV:
             return "uv"
+
+        # If we're inside an active conda env, prefer conda over pip
+        if os.environ.get("CONDA_DEFAULT_ENV"):
+            return "conda"
 
         # Check for virtualenv/pip
         if hasattr(sys, "real_prefix") or (
