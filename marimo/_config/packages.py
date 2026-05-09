@@ -24,9 +24,16 @@ def infer_package_manager() -> PackageManagerKind:
         current_dir = Path.cwd()
         root_dir = current_dir
 
+        project_markers = (
+            "pyproject.toml",
+            "requirements.txt",
+            "pixi.toml",
+            "environment.yml",
+            "environment.yaml",
+        )
         while root_dir != root_dir.parent:
-            if any(root_dir.glob("pyproject.toml")) or any(
-                root_dir.glob("requirements.txt")
+            if any(
+                any(root_dir.glob(marker)) for marker in project_markers
             ):
                 break
             root_dir = root_dir.parent

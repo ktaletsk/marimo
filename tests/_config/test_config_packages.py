@@ -148,3 +148,29 @@ def test_infer_package_manager(
                 assert infer_package_manager() == expected
         else:
             assert infer_package_manager() == expected
+
+
+@pytest.mark.parametrize(
+    ("marker_filename", "expected"),
+    [
+        ("pixi.toml", "pixi"),
+        ("environment.yml", "conda"),
+        ("environment.yaml", "conda"),
+    ],
+)
+def test_infer_package_manager_without_pyproject(
+    mock_cwd: Path, marker_filename: str, expected: str
+):
+    """A project root with only a non-pyproject manifest must still be
+    detected. Regression: previously the upward walk only anchored on
+    pyproject.toml/requirements.txt, so root_dir ended at filesystem root
+    and the manifest in CWD was missed."""
+    (mock_cwd / marker_filename).touch()
+
+    sanitized = {
+        k: v
+        for k, v in os.environ.items()
+        if k not in ("UV", "VIRTUAL_ENV", "CONDA_DEFAULT_ENV")
+    }
+    with patch.dict(os.environ, sanitized, clear=True):
+        assert infer_package_manager() == expected
