@@ -2,13 +2,28 @@
 from __future__ import annotations
 
 import os
+import shutil
 import sys
 from pathlib import Path
 from typing import Literal
 
 from marimo._utils.toml import toml_reader
 
-PackageManagerKind = Literal["pip", "rye", "uv", "poetry", "pixi", "conda"]
+PackageManagerKind = Literal[
+    "pip", "rye", "uv", "poetry", "pixi", "conda", "mamba", "micromamba"
+]
+
+
+def _preferred_conda_family_manager() -> PackageManagerKind:
+    """Pick the conda-family manager whose binary is actually on PATH.
+
+    Falls back to 'conda' when none are found so the existing
+    "manager not installed" alert can guide the user.
+    """
+    for candidate in ("conda", "mamba", "micromamba"):
+        if shutil.which(candidate):
+            return candidate  # type: ignore[return-value]
+    return "conda"
 
 
 def infer_package_manager() -> PackageManagerKind:
@@ -32,9 +47,7 @@ def infer_package_manager() -> PackageManagerKind:
             "environment.yaml",
         )
         while root_dir != root_dir.parent:
-            if any(
-                any(root_dir.glob(marker)) for marker in project_markers
-            ):
+            if any(any(root_dir.glob(marker)) for marker in project_markers):
                 break
             root_dir = root_dir.parent
 
@@ -56,11 +69,11 @@ def infer_package_manager() -> PackageManagerKind:
         if (root_dir / "pixi.toml").exists():
             return "pixi"
 
-        # misc - Check for environment.yml (conda)
+        # misc - Check for environment.yml (conda-family)
         if (root_dir / "environment.yml").exists() or (
             root_dir / "environment.yaml"
         ).exists():
-            return "conda"
+            return _preferred_conda_family_manager()
 
         # misc - Check for virtualenv/pip
         VIRTUAL_ENV = os.environ.get("VIRTUAL_ENV", "")
@@ -69,9 +82,10 @@ def infer_package_manager() -> PackageManagerKind:
         if (os.path.sep + "uv" + os.path.sep) in VIRTUAL_ENV:
             return "uv"
 
-        # If we're inside an active conda env, prefer conda over pip
+        # If we're inside an active conda/mamba env, prefer the
+        # conda-family manager whose binary is actually available.
         if os.environ.get("CONDA_DEFAULT_ENV"):
-            return "conda"
+            return _preferred_conda_family_manager()
 
         # Check for virtualenv/pip
         if hasattr(sys, "real_prefix") or (

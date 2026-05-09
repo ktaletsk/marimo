@@ -12,6 +12,8 @@ export const PackageManagerNames = [
   "poetry",
   "pixi",
   "conda",
+  "mamba",
+  "micromamba",
 ] as const;
 export type PackageManagerName = (typeof PackageManagerNames)[number];
 

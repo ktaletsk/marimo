@@ -9,6 +9,7 @@ from unittest.mock import patch
 import pytest
 
 from marimo._config.packages import (
+    _preferred_conda_family_manager,
     infer_package_manager,
     infer_package_manager_from_lockfile,
     infer_package_manager_from_pyproject,
@@ -140,8 +141,16 @@ def test_infer_package_manager(
     }
     sanitized.update(env_vars)
 
-    # Mock environment variables
-    with patch.dict(os.environ, sanitized, clear=True):
+    # Mock environment variables. Also force the conda-family preference
+    # helper to return "conda" so test outcomes don't depend on whether
+    # conda/mamba/micromamba happens to be on PATH on the test runner.
+    with (
+        patch.dict(os.environ, sanitized, clear=True),
+        patch(
+            "marimo._config.packages._preferred_conda_family_manager",
+            return_value="conda",
+        ),
+    ):
         # Mock sys attributes
         if sys_attrs:
             with patch.multiple(sys, **sys_attrs):
@@ -172,5 +181,63 @@ def test_infer_package_manager_without_pyproject(
         for k, v in os.environ.items()
         if k not in ("UV", "VIRTUAL_ENV", "CONDA_DEFAULT_ENV")
     }
-    with patch.dict(os.environ, sanitized, clear=True):
+    with (
+        patch.dict(os.environ, sanitized, clear=True),
+        patch(
+            "marimo._config.packages._preferred_conda_family_manager",
+            return_value="conda",
+        ),
+    ):
         assert infer_package_manager() == expected
+
+
+def test_preferred_conda_family_prefers_conda() -> None:
+    with patch(
+        "marimo._config.packages.shutil.which",
+        side_effect=lambda name: f"/fake/{name}",
+    ):
+        assert _preferred_conda_family_manager() == "conda"
+
+
+def test_preferred_conda_family_falls_back_to_mamba() -> None:
+    def which(name: str) -> str | None:
+        return f"/fake/{name}" if name == "mamba" else None
+
+    with patch("marimo._config.packages.shutil.which", side_effect=which):
+        assert _preferred_conda_family_manager() == "mamba"
+
+
+def test_preferred_conda_family_falls_back_to_micromamba() -> None:
+    def which(name: str) -> str | None:
+        return f"/fake/{name}" if name == "micromamba" else None
+
+    with patch("marimo._config.packages.shutil.which", side_effect=which):
+        assert _preferred_conda_family_manager() == "micromamba"
+
+
+def test_preferred_conda_family_defaults_to_conda_when_none_installed() -> (
+    None
+):
+    with patch("marimo._config.packages.shutil.which", return_value=None):
+        assert _preferred_conda_family_manager() == "conda"
+
+
+def test_infer_picks_mamba_when_only_mamba_installed(mock_cwd: Path) -> None:
+    """User scenario: CONDA_DEFAULT_ENV set by `mamba activate`, and
+    only `mamba` is on PATH (no real `conda` binary). Inference must
+    pick `mamba` rather than the unusable `conda`."""
+    (mock_cwd / "environment.yml").touch()
+
+    def which(name: str) -> str | None:
+        return f"/fake/{name}" if name == "mamba" else None
+
+    sanitized = {
+        k: v
+        for k, v in os.environ.items()
+        if k not in ("UV", "VIRTUAL_ENV", "CONDA_DEFAULT_ENV")
+    }
+    with (
+        patch.dict(os.environ, sanitized, clear=True),
+        patch("marimo._config.packages.shutil.which", side_effect=which),
+    ):
+        assert infer_package_manager() == "mamba"

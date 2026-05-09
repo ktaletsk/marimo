@@ -92,6 +92,39 @@ def test_post_install_commands_conda() -> None:
         ]
 
 
+def test_install_commands_for_mamba() -> None:
+    with patch(
+        "marimo._cli.install_hints.infer_package_manager",
+        return_value="mamba",
+    ):
+        assert get_install_commands("numpy") == [
+            "mamba install -y numpy",
+            "python -m pip install numpy",
+        ]
+
+
+def test_upgrade_commands_for_mamba() -> None:
+    with patch(
+        "marimo._cli.install_hints.infer_package_manager",
+        return_value="mamba",
+    ):
+        assert get_upgrade_commands("numpy") == [
+            "mamba update -y numpy",
+            "python -m pip install --upgrade numpy",
+        ]
+
+
+def test_install_commands_for_micromamba() -> None:
+    with patch(
+        "marimo._cli.install_hints.infer_package_manager",
+        return_value="micromamba",
+    ):
+        assert get_install_commands("numpy") == [
+            "micromamba install -y numpy",
+            "python -m pip install numpy",
+        ]
+
+
 def test_install_commands_for_pip_only() -> None:
     with patch(
         "marimo._cli.install_hints.infer_package_manager",

@@ -28,10 +28,13 @@ class CondaPackageManager(CanonicalizingPackageManager):
 
 
 class CondaCliPackageManager(CondaPackageManager):
-    """Manages packages with the ``conda`` CLI.
+    """Manages packages with a ``conda``-family CLI.
 
     Operates on the currently active conda environment (as inferred from
     ``CONDA_DEFAULT_ENV``); does not provision new environments.
+
+    Subclasses select a different binary by overriding ``name`` (which is
+    also the binary looked up on ``PATH``).
     """
 
     name = "conda"
@@ -47,7 +50,7 @@ class CondaCliPackageManager(CondaPackageManager):
         del group
         subcommand = "update" if upgrade else "install"
         return [
-            "conda",
+            self.name,
             subcommand,
             *self._env_args(),
             "-y",
@@ -59,7 +62,7 @@ class CondaCliPackageManager(CondaPackageManager):
         del group
         return await self.run(
             [
-                "conda",
+                self.name,
                 "remove",
                 *self._env_args(),
                 "-y",
@@ -74,7 +77,7 @@ class CondaCliPackageManager(CondaPackageManager):
 
         try:
             proc = subprocess.run(
-                ["conda", "list", *self._env_args(), "--json"],
+                [self.name, "list", *self._env_args(), "--json"],
                 capture_output=True,
                 text=True,
                 encoding="utf-8",
@@ -87,6 +90,21 @@ class CondaCliPackageManager(CondaPackageManager):
             ]
         except (subprocess.CalledProcessError, json.JSONDecodeError):
             return []
+
+
+class MambaPackageManager(CondaCliPackageManager):
+    """Manages packages with the ``mamba`` CLI.
+
+    mamba is conda-CLI-compatible for the subcommands marimo uses.
+    """
+
+    name = "mamba"
+
+
+class MicromambaPackageManager(CondaCliPackageManager):
+    """Manages packages with the ``micromamba`` CLI."""
+
+    name = "micromamba"
 
 
 class PixiPackageManager(CondaPackageManager):

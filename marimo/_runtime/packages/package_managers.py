@@ -3,6 +3,8 @@ from __future__ import annotations
 
 from marimo._runtime.packages.conda_package_manager import (
     CondaCliPackageManager,
+    MambaPackageManager,
+    MicromambaPackageManager,
     PixiPackageManager,
 )
 from marimo._runtime.packages.package_manager import PackageManager
@@ -23,6 +25,8 @@ PACKAGE_MANAGERS = {
     PoetryPackageManager.name: PoetryPackageManager,
     PixiPackageManager.name: PixiPackageManager,
     CondaCliPackageManager.name: CondaCliPackageManager,
+    MambaPackageManager.name: MambaPackageManager,
+    MicromambaPackageManager.name: MicromambaPackageManager,
 }
 
 

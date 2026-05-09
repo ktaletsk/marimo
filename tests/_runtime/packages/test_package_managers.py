@@ -9,6 +9,8 @@ import pytest
 from marimo._dependencies.dependencies import DependencyManager
 from marimo._runtime.packages.conda_package_manager import (
     CondaCliPackageManager,
+    MambaPackageManager,
+    MicromambaPackageManager,
     PixiPackageManager,
 )
 from marimo._runtime.packages.package_manager import LogCallback
@@ -32,6 +34,10 @@ def test_create_package_managers() -> None:
     assert isinstance(create_package_manager("uv"), UvPackageManager)
     assert isinstance(create_package_manager("pixi"), PixiPackageManager)
     assert isinstance(create_package_manager("conda"), CondaCliPackageManager)
+    assert isinstance(create_package_manager("mamba"), MambaPackageManager)
+    assert isinstance(
+        create_package_manager("micromamba"), MicromambaPackageManager
+    )
 
     with pytest.raises(RuntimeError) as e:
         create_package_manager("foobar")
@@ -883,3 +889,43 @@ def test_conda_module_to_package_uses_conda_mapping() -> None:
     assert pm.module_to_package("cv2") == "opencv"
     # Unknown modules fall back to underscore->dash
     assert pm.module_to_package("my_pkg") == "my-pkg"
+
+
+def test_mamba_install_command_uses_mamba_binary() -> None:
+    pm = MambaPackageManager()
+    with patch.dict("os.environ", {"CONDA_DEFAULT_ENV": "myenv"}):
+        cmd = pm.install_command("numpy", upgrade=False)
+    assert cmd == ["mamba", "install", "-n", "myenv", "-y", "numpy"]
+
+
+def test_mamba_uses_conda_module_mapping() -> None:
+    # Mamba shares conda's name canonicalization (e.g. cv2 -> opencv).
+    pm = MambaPackageManager()
+    assert pm.module_to_package("cv2") == "opencv"
+
+
+def test_micromamba_install_command_uses_micromamba_binary() -> None:
+    pm = MicromambaPackageManager()
+    with patch.dict("os.environ", {"CONDA_DEFAULT_ENV": "myenv"}):
+        cmd = pm.install_command("numpy", upgrade=True)
+    assert cmd == ["micromamba", "update", "-n", "myenv", "-y", "numpy"]
+
+
+async def test_mamba_uninstall_uses_mamba_binary() -> None:
+    pm = MambaPackageManager()
+    captured: list[list[str]] = []
+
+    async def fake_run(
+        command: list[str], log_callback: LogCallback | None = None
+    ) -> bool:
+        del log_callback
+        captured.append(command)
+        return True
+
+    with (
+        patch.dict("os.environ", {"CONDA_DEFAULT_ENV": "myenv"}),
+        patch.object(pm, "run", side_effect=fake_run),
+    ):
+        await pm.uninstall("numpy")
+
+    assert captured == [["mamba", "remove", "-n", "myenv", "-y", "numpy"]]
