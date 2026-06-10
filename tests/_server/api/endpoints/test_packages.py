@@ -713,3 +713,58 @@ def test_get_package_manager_no_session() -> None:
 
     # Verify create_package_manager was called without python_exe
     mock_create_pm.assert_called_once_with("pip")
+
+
+def test_conda_environments_endpoint(client: TestClient) -> None:
+    """GET /api/packages/conda_environments returns the discovered envs."""
+    from marimo._runtime.packages.conda_environments import CondaEnvironment
+
+    fake_envs = [
+        CondaEnvironment(name="base", path="/Users/me/mamba", is_active=False),
+        CondaEnvironment(
+            name="marimo-qa",
+            path="/Users/me/mamba/envs/marimo-qa",
+            is_active=True,
+        ),
+    ]
+    with patch(
+        "marimo._server.api.endpoints.packages.list_conda_environments",
+        return_value=fake_envs,
+    ) as mock_list:
+        response = client.get(
+            "/api/packages/conda_environments", headers=HEADERS
+        )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "environments": [
+            {
+                "name": "base",
+                "path": "/Users/me/mamba",
+                "isActive": False,
+            },
+            {
+                "name": "marimo-qa",
+                "path": "/Users/me/mamba/envs/marimo-qa",
+                "isActive": True,
+            },
+        ]
+    }
+    mock_list.assert_called_once_with(refresh=False)
+
+
+def test_conda_environments_endpoint_with_refresh(
+    client: TestClient,
+) -> None:
+    with patch(
+        "marimo._server.api.endpoints.packages.list_conda_environments",
+        return_value=[],
+    ) as mock_list:
+        response = client.get(
+            "/api/packages/conda_environments?refresh=true",
+            headers=HEADERS,
+        )
+
+    assert response.status_code == 200
+    assert response.json() == {"environments": []}
+    mock_list.assert_called_once_with(refresh=True)

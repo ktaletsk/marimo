@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import msgspec
 
+from marimo._runtime.packages.conda_environments import CondaEnvironment
 from marimo._runtime.packages.package_manager import PackageDescription
 from marimo._utils.uv_tree import DependencyTreeNode
 
@@ -37,6 +38,10 @@ class ListPackagesResponse(msgspec.Struct, rename="camel"):
 
 class DependencyTreeResponse(msgspec.Struct, rename="camel"):
     tree: DependencyTreeNode | None
+
+
+class ListCondaEnvironmentsResponse(msgspec.Struct, rename="camel"):
+    environments: list[CondaEnvironment]
 
 
 class PackageOperationResponse(msgspec.Struct, rename="camel"):

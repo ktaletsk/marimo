@@ -7,6 +7,9 @@ from typing import TYPE_CHECKING
 from starlette.authentication import requires
 
 from marimo._config.settings import GLOBAL_SETTINGS
+from marimo._runtime.packages.conda_environments import (
+    list_conda_environments,
+)
 from marimo._runtime.packages.package_manager import PackageManager
 from marimo._runtime.packages.package_managers import create_package_manager
 from marimo._runtime.packages.utils import split_packages
@@ -15,6 +18,7 @@ from marimo._server.api.utils import parse_request
 from marimo._server.models.packages import (
     AddPackageRequest,
     DependencyTreeResponse,
+    ListCondaEnvironmentsResponse,
     ListPackagesResponse,
     PackageOperationResponse,
     RemovePackageRequest,
@@ -177,6 +181,28 @@ async def dependency_tree(request: Request) -> DependencyTreeResponse:
     else:
         tree = await asyncio.to_thread(package_manager.dependency_tree)
     return DependencyTreeResponse(tree=tree)
+
+
+@router.get("/conda_environments")
+@requires("edit")
+async def conda_environments(
+    request: Request,
+) -> ListCondaEnvironmentsResponse:
+    """
+    responses:
+        200:
+            description: List conda-family environments on the machine
+            content:
+                application/json:
+                    schema:
+                        $ref: "#/components/schemas/ListCondaEnvironmentsResponse"
+    """
+    refresh = request.query_params.get("refresh", "").lower() in (
+        "1",
+        "true",
+    )
+    envs = await asyncio.to_thread(list_conda_environments, refresh=refresh)
+    return ListCondaEnvironmentsResponse(environments=envs)
 
 
 def _get_package_manager(request: Request) -> PackageManager:
