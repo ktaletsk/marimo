@@ -22,8 +22,12 @@ from marimo._server.models.packages import (
     ListPackagesResponse,
     PackageOperationResponse,
     RemovePackageRequest,
+    SetNotebookCondaEnvironmentRequest,
 )
 from marimo._server.router import APIRouter
+from marimo._utils.inline_script_metadata import (
+    update_marimo_tool_in_script,
+)
 
 if TYPE_CHECKING:
     from starlette.requests import Request
@@ -203,6 +207,44 @@ async def conda_environments(
     )
     envs = await asyncio.to_thread(list_conda_environments, refresh=refresh)
     return ListCondaEnvironmentsResponse(environments=envs)
+
+
+@router.post("/conda_environment")
+@requires("edit")
+async def set_notebook_conda_environment(
+    request: Request,
+) -> PackageOperationResponse:
+    """
+    requestBody:
+        content:
+            application/json:
+                schema:
+                    $ref: "#/components/schemas/SetNotebookCondaEnvironmentRequest"
+    responses:
+        200:
+            description: Bind the current notebook to a conda env
+            content:
+                application/json:
+                    schema:
+                        $ref: "#/components/schemas/PackageOperationResponse"
+    """
+    body = await parse_request(request, cls=SetNotebookCondaEnvironmentRequest)
+    filename = _get_filename(request)
+    if filename is None:
+        return PackageOperationResponse.of_failure(
+            "Cannot bind a conda environment: no notebook file is open."
+        )
+
+    ok = await asyncio.to_thread(
+        update_marimo_tool_in_script,
+        filename,
+        conda_environment=body.environment,
+    )
+    if not ok:
+        return PackageOperationResponse.of_failure(
+            f"Failed to update conda environment binding in {filename}."
+        )
+    return PackageOperationResponse.of_success()
 
 
 def _get_package_manager(request: Request) -> PackageManager:

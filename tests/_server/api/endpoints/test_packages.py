@@ -768,3 +768,77 @@ def test_conda_environments_endpoint_with_refresh(
     assert response.status_code == 200
     assert response.json() == {"environments": []}
     mock_list.assert_called_once_with(refresh=True)
+
+
+def test_set_notebook_conda_environment_no_filename(
+    client: TestClient,
+) -> None:
+    """When no notebook is open in the session, the call fails cleanly."""
+    with patch(
+        "marimo._server.api.endpoints.packages._get_filename",
+        return_value=None,
+    ):
+        response = client.post(
+            "/api/packages/conda_environment",
+            headers=HEADERS,
+            json={"environment": "marimo-qa"},
+        )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["success"] is False
+    assert "no notebook file is open" in body["error"]
+
+
+def test_set_notebook_conda_environment_persists(
+    client: TestClient, tmp_path
+) -> None:
+    """Happy path: a notebook on disk gets the binding written."""
+    nb = tmp_path / "nb.py"
+    nb.write_text("import marimo as mo\n", encoding="utf-8")
+
+    with patch(
+        "marimo._server.api.endpoints.packages._get_filename",
+        return_value=str(nb),
+    ):
+        response = client.post(
+            "/api/packages/conda_environment",
+            headers=HEADERS,
+            json={"environment": "marimo-qa"},
+        )
+
+    assert response.status_code == 200
+    assert response.json() == {"success": True, "error": None}
+    contents = nb.read_text(encoding="utf-8")
+    assert "# /// script" in contents
+    assert 'conda_environment = "marimo-qa"' in contents
+
+
+def test_set_notebook_conda_environment_clears_with_null(
+    client: TestClient, tmp_path
+) -> None:
+    nb = tmp_path / "nb.py"
+    nb.write_text(
+        """# /// script
+# [tool.marimo]
+# conda_environment = "marimo-qa"
+# ///
+
+import marimo as mo
+""",
+        encoding="utf-8",
+    )
+
+    with patch(
+        "marimo._server.api.endpoints.packages._get_filename",
+        return_value=str(nb),
+    ):
+        response = client.post(
+            "/api/packages/conda_environment",
+            headers=HEADERS,
+            json={"environment": None},
+        )
+
+    assert response.status_code == 200
+    assert response.json() == {"success": True, "error": None}
+    assert "conda_environment" not in nb.read_text(encoding="utf-8")

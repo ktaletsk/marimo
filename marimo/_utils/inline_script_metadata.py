@@ -10,9 +10,16 @@ from marimo import _loggers
 from marimo._cli.files.file_path import FileContentReader
 from marimo._utils.code import hash_code
 from marimo._utils.paths import normalize_path
-from marimo._utils.scripts import read_pyproject_from_script
+from marimo._utils.scripts import (
+    REGEX as _SCRIPT_BLOCK_REGEX,
+    read_pyproject_from_script,
+)
 
 LOGGER = _loggers.marimo_logger()
+
+# Sentinel used by update_marimo_tool_in_script to distinguish
+# "leave unchanged" from "delete this key" (which is signaled by None).
+_UNSET = object()
 
 
 class PyProjectReader:
@@ -79,6 +86,27 @@ class PyProjectReader:
     @property
     def dependencies(self) -> list[str]:
         return self.project.get("dependencies", [])  # type: ignore[no-any-return]
+
+    @property
+    def marimo_tool(self) -> dict[str, Any]:
+        """The ``[tool.marimo]`` sub-table from the inline script metadata."""
+        tool = self.project.get("tool", {})
+        marimo = tool.get("marimo", {})
+        return marimo if isinstance(marimo, dict) else {}
+
+    @property
+    def conda_environment(self) -> str | None:
+        """Name of the conda env this notebook is bound to, if any."""
+        val = self.marimo_tool.get("conda_environment")
+        return val if isinstance(val, str) and val else None
+
+    @property
+    def conda_channels(self) -> list[str]:
+        """Per-notebook conda channel overrides. Empty list when unset."""
+        val = self.marimo_tool.get("conda_channels", [])
+        if not isinstance(val, list):
+            return []
+        return [c for c in val if isinstance(c, str)]
 
     @property
     def requirements_txt_lines(self) -> list[str]:
@@ -263,3 +291,135 @@ def script_metadata_hash_from_filename(name: str) -> str | None:
         ensure_ascii=False,
     )
     return hash_code(serialized)
+
+
+def update_marimo_tool_in_script(
+    filepath: str,
+    *,
+    conda_environment: str | None | Any = _UNSET,
+    conda_channels: list[str] | None | Any = _UNSET,
+) -> bool:
+    """Set or clear ``[tool.marimo]`` keys in a notebook's PEP 723 block.
+
+    For each keyword: pass a value to set it, pass ``None`` to delete the
+    key, omit the kwarg to leave it untouched. Returns ``True`` on
+    success, ``False`` if the file cannot be read or rewritten.
+
+    If the file has no ``# /// script`` block and at least one key is
+    being set, a new block is prepended at the top of the file.
+    """
+    updates: dict[str, Any] = {}
+    if conda_environment is not _UNSET:
+        updates["conda_environment"] = conda_environment
+    if conda_channels is not _UNSET:
+        updates["conda_channels"] = conda_channels
+    if not updates:
+        return True
+
+    try:
+        path = Path(filepath)
+        original = path.read_text(encoding="utf-8")
+    except OSError as e:
+        LOGGER.warning(
+            "Failed to read %s for marimo-tool update: %s", filepath, e
+        )
+        return False
+
+    try:
+        new_contents = _apply_marimo_tool_updates(original, updates)
+    except Exception as e:
+        LOGGER.warning("Failed to update [tool.marimo] in %s: %s", filepath, e)
+        return False
+
+    if new_contents == original:
+        return True
+
+    try:
+        path.write_text(new_contents, encoding="utf-8")
+    except OSError as e:
+        LOGGER.warning(
+            "Failed to write %s after marimo-tool update: %s", filepath, e
+        )
+        return False
+    return True
+
+
+def _apply_marimo_tool_updates(contents: str, updates: dict[str, Any]) -> str:
+    """Pure-function core of :func:`update_marimo_tool_in_script`.
+
+    Splits out for testability — takes file contents, returns new contents.
+    """
+    import tomlkit
+
+    script_matches = [
+        m
+        for m in re.finditer(_SCRIPT_BLOCK_REGEX, contents)
+        if m.group("type") == "script"
+    ]
+    if len(script_matches) > 1:
+        raise ValueError("Multiple script blocks found")
+    match = script_matches[0] if script_matches else None
+
+    if match is None:
+        # No script block yet — create one if there is anything to write.
+        toml_doc = tomlkit.document()
+    else:
+        # Strip the leading "# " / "#" from each metadata line.
+        raw_lines = match.group("content").splitlines(keepends=True)
+        stripped = "".join(
+            line[2:] if line.startswith("# ") else line[1:]
+            for line in raw_lines
+        )
+        toml_doc = tomlkit.parse(stripped)
+
+    tool_table = toml_doc.get("tool")
+    if tool_table is None:
+        tool_table = tomlkit.table()
+        toml_doc["tool"] = tool_table
+
+    marimo_table = tool_table.get("marimo")
+    if marimo_table is None:
+        marimo_table = tomlkit.table()
+        tool_table["marimo"] = marimo_table
+
+    changed = False
+    for key, value in updates.items():
+        if value is None:
+            if key in marimo_table:
+                del marimo_table[key]
+                changed = True
+        else:
+            marimo_table[key] = value
+            changed = True
+
+    # Tidy up: drop [tool.marimo] / [tool] if they end up empty.
+    if not marimo_table:
+        del tool_table["marimo"]
+    if not tool_table:
+        del toml_doc["tool"]
+
+    if not changed:
+        return contents
+
+    rendered_toml = tomlkit.dumps(toml_doc).rstrip()
+    if not rendered_toml:
+        # No remaining keys at all — if there was a pre-existing block, we
+        # leave an empty `# /// script\n# ///\n` rather than removing it
+        # (caller likely just deleted the one key they cared about).
+        rendered_block = "# /// script\n# ///"
+    else:
+        rendered_block_lines = ["# /// script"]
+        for line in rendered_toml.split("\n"):
+            rendered_block_lines.append(f"# {line}" if line else "#")
+        rendered_block_lines.append("# ///")
+        rendered_block = "\n".join(rendered_block_lines)
+
+    if match is None:
+        # Prepend new block.
+        if contents and not contents.startswith("\n"):
+            return rendered_block + "\n\n" + contents
+        return rendered_block + contents
+
+    # Replace existing block in place.
+    start, end = match.start(), match.end()
+    return contents[:start] + rendered_block + contents[end:]

@@ -6,10 +6,12 @@ import pytest
 
 from marimo._utils.inline_script_metadata import (
     PyProjectReader,
+    _apply_marimo_tool_updates,
     _pyproject_toml_to_requirements_txt,
     has_marimo_in_script_metadata,
     is_marimo_dependency,
     script_metadata_hash_from_filename,
+    update_marimo_tool_in_script,
 )
 from marimo._utils.platform import is_windows
 from marimo._utils.scripts import read_pyproject_from_script
@@ -432,3 +434,209 @@ def test_script_metadata_hash_from_filename_changes_with_dependencies(
     assert script_metadata_hash_from_filename(
         str(first)
     ) != script_metadata_hash_from_filename(str(second))
+
+
+# ---- PyProjectReader: [tool.marimo] reads ------------------------------------
+
+
+def test_reader_exposes_conda_environment() -> None:
+    script = """
+# /// script
+# [tool.marimo]
+# conda_environment = "marimo-qa"
+# conda_channels = ["conda-forge", "nvidia"]
+# ///
+
+import marimo as mo
+"""
+    reader = PyProjectReader.from_script(script)
+    assert reader.conda_environment == "marimo-qa"
+    assert reader.conda_channels == ["conda-forge", "nvidia"]
+    assert reader.marimo_tool == {
+        "conda_environment": "marimo-qa",
+        "conda_channels": ["conda-forge", "nvidia"],
+    }
+
+
+def test_reader_defaults_when_tool_marimo_absent() -> None:
+    reader = PyProjectReader.from_script(
+        """
+# /// script
+# dependencies = ["polars"]
+# ///
+"""
+    )
+    assert reader.conda_environment is None
+    assert reader.conda_channels == []
+    assert reader.marimo_tool == {}
+
+
+def test_reader_ignores_non_string_conda_environment() -> None:
+    reader = PyProjectReader.from_script(
+        """
+# /// script
+# [tool.marimo]
+# conda_environment = 42
+# ///
+"""
+    )
+    assert reader.conda_environment is None
+
+
+def test_reader_filters_non_string_channels() -> None:
+    reader = PyProjectReader.from_script(
+        """
+# /// script
+# [tool.marimo]
+# conda_channels = ["conda-forge", 42, "nvidia"]
+# ///
+"""
+    )
+    assert reader.conda_channels == ["conda-forge", "nvidia"]
+
+
+# ---- _apply_marimo_tool_updates: in-memory transformation --------------------
+
+
+def _read_after(updated: str) -> PyProjectReader:
+    return PyProjectReader.from_script(updated)
+
+
+def test_apply_sets_keys_in_existing_block() -> None:
+    original = """# /// script
+# dependencies = ["polars"]
+# ///
+
+import polars as pl
+"""
+    updated = _apply_marimo_tool_updates(
+        original,
+        {"conda_environment": "marimo-qa", "conda_channels": ["conda-forge"]},
+    )
+    assert "import polars as pl" in updated
+    reader = _read_after(updated)
+    assert reader.conda_environment == "marimo-qa"
+    assert reader.conda_channels == ["conda-forge"]
+    assert reader.dependencies == ["polars"]
+
+
+def test_apply_creates_block_when_absent() -> None:
+    original = "import marimo as mo\n"
+    updated = _apply_marimo_tool_updates(
+        original, {"conda_environment": "marimo-qa"}
+    )
+    assert updated.startswith("# /// script\n")
+    assert "import marimo as mo" in updated
+    assert _read_after(updated).conda_environment == "marimo-qa"
+
+
+def test_apply_deletes_key_when_set_to_none() -> None:
+    original = """# /// script
+# [tool.marimo]
+# conda_environment = "marimo-qa"
+# conda_channels = ["conda-forge"]
+# ///
+"""
+    updated = _apply_marimo_tool_updates(original, {"conda_environment": None})
+    reader = _read_after(updated)
+    assert reader.conda_environment is None
+    assert reader.conda_channels == ["conda-forge"]
+
+
+def test_apply_drops_empty_tool_marimo_table() -> None:
+    original = """# /// script
+# [tool.marimo]
+# conda_environment = "marimo-qa"
+# ///
+"""
+    updated = _apply_marimo_tool_updates(original, {"conda_environment": None})
+    # Block should remain but [tool.marimo] is gone.
+    assert "tool.marimo" not in updated
+    assert "conda_environment" not in updated
+
+
+def test_apply_preserves_other_tool_subtables() -> None:
+    original = """# /// script
+# dependencies = ["polars"]
+# [tool.uv]
+# index-url = "https://example.com/simple"
+# ///
+"""
+    updated = _apply_marimo_tool_updates(
+        original, {"conda_environment": "marimo-qa"}
+    )
+    reader = _read_after(updated)
+    assert reader.conda_environment == "marimo-qa"
+    assert reader.dependencies == ["polars"]
+    assert reader.index_url == "https://example.com/simple"
+
+
+def test_apply_rejects_multiple_script_blocks() -> None:
+    original = """# /// script
+# dependencies = []
+# ///
+
+# /// script
+# dependencies = ["x"]
+# ///
+"""
+    with pytest.raises(ValueError, match="Multiple script blocks"):
+        _apply_marimo_tool_updates(original, {"conda_environment": "qa"})
+
+
+# ---- update_marimo_tool_in_script: end-to-end file mutation ------------------
+
+
+def test_update_marimo_tool_in_script_roundtrip(tmp_path: Path) -> None:
+    f = tmp_path / "nb.py"
+    f.write_text(
+        """# /// script
+# dependencies = ["polars"]
+# ///
+
+import polars as pl
+""",
+        encoding="utf-8",
+    )
+
+    assert update_marimo_tool_in_script(
+        str(f),
+        conda_environment="marimo-qa",
+        conda_channels=["conda-forge", "nvidia"],
+    )
+    reader = PyProjectReader.from_filename(str(f))
+    assert reader.conda_environment == "marimo-qa"
+    assert reader.conda_channels == ["conda-forge", "nvidia"]
+    assert reader.dependencies == ["polars"]
+
+
+def test_update_marimo_tool_creates_block_when_missing(tmp_path: Path) -> None:
+    f = tmp_path / "nb.py"
+    f.write_text("import marimo as mo\n", encoding="utf-8")
+
+    assert update_marimo_tool_in_script(str(f), conda_environment="marimo-qa")
+    contents = f.read_text(encoding="utf-8")
+    assert contents.startswith("# /// script\n")
+    assert (
+        PyProjectReader.from_filename(str(f)).conda_environment == "marimo-qa"
+    )
+
+
+def test_update_marimo_tool_noop_when_no_kwargs_given(tmp_path: Path) -> None:
+    f = tmp_path / "nb.py"
+    f.write_text("import marimo as mo\n", encoding="utf-8")
+
+    assert update_marimo_tool_in_script(str(f))
+    assert f.read_text(encoding="utf-8") == "import marimo as mo\n"
+
+
+def test_update_marimo_tool_returns_false_for_missing_file(
+    tmp_path: Path,
+) -> None:
+    missing = tmp_path / "does-not-exist.py"
+    assert (
+        update_marimo_tool_in_script(
+            str(missing), conda_environment="marimo-qa"
+        )
+        is False
+    )
