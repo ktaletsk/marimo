@@ -18,6 +18,7 @@ from marimo._server.api.utils import parse_request
 from marimo._server.models.packages import (
     AddPackageRequest,
     DependencyTreeResponse,
+    GetNotebookCondaEnvironmentResponse,
     ListCondaEnvironmentsResponse,
     ListPackagesResponse,
     PackageOperationResponse,
@@ -26,6 +27,7 @@ from marimo._server.models.packages import (
 )
 from marimo._server.router import APIRouter
 from marimo._utils.inline_script_metadata import (
+    PyProjectReader,
     update_marimo_tool_in_script,
 )
 
@@ -207,6 +209,33 @@ async def conda_environments(
     )
     envs = await asyncio.to_thread(list_conda_environments, refresh=refresh)
     return ListCondaEnvironmentsResponse(environments=envs)
+
+
+@router.get("/conda_environment")
+@requires("edit")
+async def get_notebook_conda_environment(
+    request: Request,
+) -> GetNotebookCondaEnvironmentResponse:
+    """
+    responses:
+        200:
+            description: The conda binding declared in the current notebook
+            content:
+                application/json:
+                    schema:
+                        $ref: "#/components/schemas/GetNotebookCondaEnvironmentResponse"
+    """
+    filename = _get_filename(request)
+    if filename is None:
+        return GetNotebookCondaEnvironmentResponse(
+            environment=None, channels=[]
+        )
+
+    reader = await asyncio.to_thread(PyProjectReader.from_filename, filename)
+    return GetNotebookCondaEnvironmentResponse(
+        environment=reader.conda_environment,
+        channels=reader.conda_channels,
+    )
 
 
 @router.post("/conda_environment")

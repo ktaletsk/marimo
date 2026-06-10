@@ -818,6 +818,20 @@ components:
       - options
       title: CompletionResultNotification
       type: object
+    CondaEnvironment:
+      properties:
+        isActive:
+          type: boolean
+        name:
+          type: string
+        path:
+          type: string
+      required:
+      - name
+      - path
+      - isActive
+      title: CondaEnvironment
+      type: object
     CopyNotebookRequest:
       properties:
         destination:
@@ -2013,6 +2027,22 @@ components:
       required: []
       title: GetCacheInfoRequest
       type: object
+    GetNotebookCondaEnvironmentResponse:
+      description: The conda binding currently declared in the notebook file.
+      properties:
+        channels:
+          items:
+            type: string
+          type: array
+        environment:
+          anyOf:
+          - type: string
+          - type: 'null'
+      required:
+      - environment
+      - channels
+      title: GetNotebookCondaEnvironmentResponse
+      type: object
     GitHubConfig:
       description: "Configuration options for GitHub.\n\n    **Keys.**\n\n    - `api_key`:\
         \ the GitHub API token\n    - `base_url`: the base URL for the API\n    -\
@@ -2704,6 +2734,16 @@ components:
           type: array
       required: []
       title: LintConfig
+      type: object
+    ListCondaEnvironmentsResponse:
+      properties:
+        environments:
+          items:
+            $ref: '#/components/schemas/CondaEnvironment'
+          type: array
+      required:
+      - environments
+      title: ListCondaEnvironmentsResponse
       type: object
     ListDataSourceConnectionCommand:
       description: "List data source schemas.\n\n    Retrieves available schemas for\
@@ -3676,6 +3716,9 @@ components:
       properties:
         manager:
           enum:
+          - conda
+          - mamba
+          - micromamba
           - pip
           - pixi
           - poetry
@@ -4496,6 +4539,19 @@ components:
       - cellId
       - name
       title: SetName
+      type: object
+    SetNotebookCondaEnvironmentRequest:
+      description: "Bind (or unbind) the current notebook to a conda env.\n\n    ``None``\
+        \ clears the binding (the kernel falls back to the system\n    Python / whatever\
+        \ the parent shell provides)."
+      properties:
+        environment:
+          anyOf:
+          - type: string
+          - type: 'null'
+      required:
+      - environment
+      title: SetNotebookCondaEnvironmentRequest
       type: object
     SetupRootError:
       properties:
@@ -6737,6 +6793,37 @@ paths:
               schema:
                 $ref: '#/components/schemas/PackageOperationResponse'
           description: Install package
+  /api/packages/conda_environment:
+    get:
+      responses:
+        200:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GetNotebookCondaEnvironmentResponse'
+          description: The conda binding declared in the current notebook
+    post:
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetNotebookCondaEnvironmentRequest'
+      responses:
+        200:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PackageOperationResponse'
+          description: Bind the current notebook to a conda env
+  /api/packages/conda_environments:
+    get:
+      responses:
+        200:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListCondaEnvironmentsResponse'
+          description: List conda-family environments on the machine
   /api/packages/list:
     get:
       responses:

@@ -82,6 +82,9 @@ const ACTIONS: Record<keyof AllRequests, Action> = {
   sendShutdown: "throwError",
   getPackageList: "throwError",
   getDependencyTree: "throwError",
+  listCondaEnvironments: "throwError",
+  getNotebookCondaEnvironment: "throwError",
+  setNotebookCondaEnvironment: "throwError",
   addPackage: "throwError",
   removePackage: "throwError",
 

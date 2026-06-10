@@ -232,6 +232,7 @@ def _generate_server_api_schema() -> dict[str, Any]:
     from marimo._messaging.mimetypes import KnownMimeType
     from marimo._metadata import opengraph
     from marimo._runtime import commands
+    from marimo._runtime.packages.conda_environments import CondaEnvironment
     from marimo._runtime.packages.package_manager import PackageDescription
     from marimo._server.ai.tools.types import ToolDefinition
     from marimo._server.api.router import build_routes
@@ -380,6 +381,10 @@ def _generate_server_api_schema() -> dict[str, Any]:
         packages.PackageOperationResponse,
         packages.RemovePackageRequest,
         packages.DependencyTreeResponse,
+        CondaEnvironment,
+        packages.ListCondaEnvironmentsResponse,
+        packages.GetNotebookCondaEnvironmentResponse,
+        packages.SetNotebookCondaEnvironmentRequest,
         lsp.LspHealthResponse,
         lsp.LspRestartRequest,
         lsp.LspRestartResponse,

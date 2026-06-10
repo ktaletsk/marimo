@@ -468,6 +468,31 @@ export function createNetworkRequests(): EditRequests & RunRequests {
       await waitForConnectionOpen();
       return getClient().GET("/api/packages/tree").then(handleResponse);
     },
+    listCondaEnvironments: async (opts) => {
+      await waitForConnectionOpen();
+      // The OpenAPI spec does not declare ?refresh, so we add it manually.
+      const path = opts?.refresh
+        ? "/api/packages/conda_environments?refresh=true"
+        : "/api/packages/conda_environments";
+      // openapi-fetch's typed client wants a known path; cast for the
+      // query-suffixed variant.
+      return getClient()
+        .GET(
+          path as "/api/packages/conda_environments",
+        )
+        .then(handleResponse);
+    },
+    getNotebookCondaEnvironment: async () => {
+      await waitForConnectionOpen();
+      return getClient()
+        .GET("/api/packages/conda_environment")
+        .then(handleResponse);
+    },
+    setNotebookCondaEnvironment: (request) => {
+      return getClient()
+        .POST("/api/packages/conda_environment", { body: request })
+        .then(handleResponse);
+    },
     listSecretKeys: async (request) => {
       // If the sidebar is already open, it may try to load before the session has been initialized
       await waitForConnectionOpen();

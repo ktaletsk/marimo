@@ -54,6 +54,13 @@ class SetNotebookCondaEnvironmentRequest(msgspec.Struct, rename="camel"):
     environment: str | None
 
 
+class GetNotebookCondaEnvironmentResponse(msgspec.Struct, rename="camel"):
+    """The conda binding currently declared in the notebook file."""
+
+    environment: str | None
+    channels: list[str]
+
+
 class PackageOperationResponse(msgspec.Struct, rename="camel"):
     success: bool
     error: str | None = None

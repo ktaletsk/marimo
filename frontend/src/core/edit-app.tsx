@@ -10,6 +10,7 @@ import { useEffect } from "react";
 import { NotStartedConnectionAlert } from "@/components/editor/alerts/connecting-alert";
 import { Controls } from "@/components/editor/controls/Controls";
 import { AppHeader } from "@/components/editor/header/app-header";
+import { CondaEnvPicker } from "@/components/editor/header/conda-env-picker";
 import { FilenameForm } from "@/components/editor/header/filename-form";
 import { MultiCellActionToolbar } from "@/components/editor/navigation/multi-cell-action-toolbar";
 import { cn } from "@/utils/cn";
@@ -156,8 +157,9 @@ export const EditApp: React.FC<AppProps> = ({
           )}
         >
           {isEditing && (
-            <div className="flex items-center justify-center container">
+            <div className="flex items-center justify-center container gap-3">
               <FilenameForm filename={filename} />
+              <CondaEnvPicker />
             </div>
           )}
         </AppHeader>

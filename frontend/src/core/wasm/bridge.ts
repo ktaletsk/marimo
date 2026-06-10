@@ -594,6 +594,19 @@ export class PyodideBridge implements RunRequests, EditRequests {
     };
   };
 
+  listCondaEnvironments: EditRequests["listCondaEnvironments"] = async () => {
+    // Conda envs are a host-OS concept; not available in WASM.
+    return { environments: [] };
+  };
+  getNotebookCondaEnvironment: EditRequests["getNotebookCondaEnvironment"] =
+    async () => {
+      return { environment: null, channels: [] };
+    };
+  setNotebookCondaEnvironment: EditRequests["setNotebookCondaEnvironment"] =
+    async () => {
+      return { success: true, error: null };
+    };
+
   listSecretKeys: EditRequests["listSecretKeys"] = async (request) => {
     await this.putControlRequest({
       type: "list-secret-keys",

@@ -2717,6 +2717,99 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/packages/conda_environment": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description The conda binding declared in the current notebook */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": components["schemas"]["GetNotebookCondaEnvironmentResponse"];
+          };
+        };
+      };
+    };
+    put?: never;
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: {
+        content: {
+          "application/json": components["schemas"]["SetNotebookCondaEnvironmentRequest"];
+        };
+      };
+      responses: {
+        /** @description Bind the current notebook to a conda env */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": components["schemas"]["PackageOperationResponse"];
+          };
+        };
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/packages/conda_environments": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description List conda-family environments on the machine */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": components["schemas"]["ListCondaEnvironmentsResponse"];
+          };
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/packages/list": {
     parameters: {
       query?: never;
@@ -3856,6 +3949,12 @@ export interface components {
       options: components["schemas"]["CompletionOption"][];
       prefix_length: number;
     };
+    /** CondaEnvironment */
+    CondaEnvironment: {
+      isActive: boolean;
+      name: string;
+      path: string;
+    };
     /** CopyNotebookRequest */
     CopyNotebookRequest: {
       destination: string;
@@ -4540,6 +4639,14 @@ export interface components {
     /** GetCacheInfoRequest */
     GetCacheInfoRequest: Record<string, any>;
     /**
+     * GetNotebookCondaEnvironmentResponse
+     * @description The conda binding currently declared in the notebook file.
+     */
+    GetNotebookCondaEnvironmentResponse: {
+      channels: string[];
+      environment: string | null;
+    };
+    /**
      * GitHubConfig
      * @description Configuration options for GitHub.
      *
@@ -4987,6 +5094,10 @@ export interface components {
     LintConfig: {
       ignore?: string[];
       select?: string[];
+    };
+    /** ListCondaEnvironmentsResponse */
+    ListCondaEnvironmentsResponse: {
+      environments: components["schemas"]["CondaEnvironment"][];
     };
     /**
      * ListDataSourceConnectionCommand
@@ -5553,7 +5664,15 @@ export interface components {
      */
     PackageManagementConfig: {
       /** @enum {unknown} */
-      manager: "pip" | "pixi" | "poetry" | "rye" | "uv";
+      manager:
+        | "conda"
+        | "mamba"
+        | "micromamba"
+        | "pip"
+        | "pixi"
+        | "poetry"
+        | "rye"
+        | "uv";
     };
     /** PackageOperationResponse */
     PackageOperationResponse: {
@@ -6078,6 +6197,16 @@ export interface components {
       name: string;
       /** @enum {unknown} */
       type: "set-name";
+    };
+    /**
+     * SetNotebookCondaEnvironmentRequest
+     * @description Bind (or unbind) the current notebook to a conda env.
+     *
+     *         ``None`` clears the binding (the kernel falls back to the system
+     *         Python / whatever the parent shell provides).
+     */
+    SetNotebookCondaEnvironmentRequest: {
+      environment: string | null;
     };
     /** SetupRootError */
     SetupRootError: {
