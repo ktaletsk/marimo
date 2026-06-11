@@ -156,3 +156,51 @@ def test_list_envs_uses_preferred_binary(monkeypatch) -> None:
     args, _ = mock_run.call_args
     assert args[0][0] == "mamba"
     assert args[0][1:] == ["env", "list", "--json"]
+
+
+def test_find_environment_by_name_returns_match(monkeypatch) -> None:
+    from marimo._runtime.packages.conda_environments import (
+        find_environment_by_name,
+    )
+
+    output = json.dumps(
+        {
+            "envs": [
+                "/Users/me/mamba",
+                "/Users/me/mamba/envs/marimo-qa",
+            ]
+        }
+    )
+    monkeypatch.delenv("CONDA_PREFIX", raising=False)
+    with _patch_preferred(), _patch_subprocess(output):
+        match = find_environment_by_name("marimo-qa")
+    assert match is not None
+    assert match.name == "marimo-qa"
+    assert match.path == "/Users/me/mamba/envs/marimo-qa"
+
+
+def test_find_environment_by_name_returns_none_when_absent(
+    monkeypatch,
+) -> None:
+    from marimo._runtime.packages.conda_environments import (
+        find_environment_by_name,
+    )
+
+    monkeypatch.delenv("CONDA_PREFIX", raising=False)
+    with _patch_preferred(), _patch_subprocess(json.dumps({"envs": []})):
+        assert find_environment_by_name("nonexistent") is None
+
+
+def test_conda_env_python_path_posix(tmp_path) -> None:
+    from marimo._runtime.packages.conda_environments import (
+        CondaEnvironment,
+        conda_env_python_path,
+    )
+
+    env_dir = tmp_path / "myenv"
+    bin_dir = env_dir / "bin"
+    bin_dir.mkdir(parents=True)
+    (bin_dir / "python").touch()
+
+    env = CondaEnvironment(name="myenv", path=str(env_dir), is_active=False)
+    assert conda_env_python_path(env) == str(bin_dir / "python")

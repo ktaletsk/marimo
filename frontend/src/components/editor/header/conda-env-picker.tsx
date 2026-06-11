@@ -35,8 +35,12 @@ import { Logger } from "@/utils/Logger";
  * full path on a second muted line.
  */
 export const CondaEnvPicker: React.FC = () => {
-  const { listCondaEnvironments, getNotebookCondaEnvironment, setNotebookCondaEnvironment } =
-    useRequestClient();
+  const {
+    listCondaEnvironments,
+    getNotebookCondaEnvironment,
+    setNotebookCondaEnvironment,
+    sendRestart,
+  } = useRequestClient();
 
   const envsData = useAsyncData(
     () => listCondaEnvironments().then((r) => r.environments),
@@ -79,6 +83,10 @@ export const CondaEnvPicker: React.FC = () => {
   }
 
   const onPick = async (name: string | null) => {
+    if (name === declared) {
+      // No-op selection — don't restart for nothing.
+      return;
+    }
     setPending(true);
     try {
       const res = await setNotebookCondaEnvironment({ environment: name });
@@ -87,6 +95,10 @@ export const CondaEnvPicker: React.FC = () => {
         return;
       }
       await bindingData.refetch();
+      // The kernel must restart for the new env to take effect.
+      // Changing envs destroys notebook state by design; the user just
+      // told us "use a different Python," so we honor that.
+      await sendRestart();
     } catch (e) {
       Logger.error(e);
     } finally {

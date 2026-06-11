@@ -128,3 +128,31 @@ def _list_environments_uncached(binary: str) -> list[CondaEnvironment]:
 def clear_cache() -> None:
     """Drop any cached env list; the next call re-queries the binary."""
     _cache.clear()
+
+
+def find_environment_by_name(name: str) -> CondaEnvironment | None:
+    """Return the env with the given name, or ``None`` if not on this machine.
+
+    Note: when two envs share a display name (e.g. two ``base`` envs from a
+    coexisting mambaforge + anaconda install), the first match wins. The
+    notebook picker prevents this case in practice by writing only what
+    the user selected; the disambiguation happens in the UI.
+    """
+    for env in list_conda_environments():
+        if env.name == name:
+            return env
+    return None
+
+
+def conda_env_python_path(env: CondaEnvironment) -> str:
+    """Return the path to ``python`` inside the given env."""
+    # Cross-platform: Windows puts the interpreter at <env>/python.exe,
+    # POSIX at <env>/bin/python.
+    base = Path(env.path)
+    posix = base / "bin" / "python"
+    if posix.exists():
+        return str(posix)
+    windows = base / "python.exe"
+    if windows.exists():
+        return str(windows)
+    return str(posix)  # best-effort fallback for missing envs

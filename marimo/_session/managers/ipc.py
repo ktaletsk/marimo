@@ -21,9 +21,14 @@ from marimo._cli.sandbox import (
 )
 from marimo._config.config import VenvConfig
 from marimo._config.manager import MarimoConfigReader
+from marimo._config.packages import _preferred_conda_family_manager
 from marimo._config.settings import GLOBAL_SETTINGS
 from marimo._messaging.types import KernelMessage
 from marimo._runtime import commands
+from marimo._runtime.packages.conda_environments import (
+    conda_env_python_path,
+    find_environment_by_name,
+)
 from marimo._session._venv import (
     check_python_version_compatibility,
     get_configured_venv_python,
@@ -35,6 +40,7 @@ from marimo._session._venv import (
 from marimo._session.model import SessionMode
 from marimo._session.queue import ProcessLike, QueueType, route_control_request
 from marimo._session.types import KernelManager, QueueManager
+from marimo._utils.inline_script_metadata import PyProjectReader
 from marimo._utils.subprocess import try_kill_process_and_group
 from marimo._utils.typed_connection import TypedConnection
 
@@ -52,6 +58,49 @@ def _get_venv_config(config_manager: MarimoConfigReader) -> VenvConfig:
     """Get the [tool.marimo.venv] config from a config manager."""
     config = config_manager.get_config(hide_secrets=False)
     return cast(VenvConfig, config.get("venv", {}))
+
+
+def _resolve_conda_env(
+    filename: str | None,
+) -> tuple[str | None, str | None]:
+    """Read [tool.marimo.conda_environment] from the notebook and resolve.
+
+    Returns ``(env_name, env_python_path)`` when the binding is set AND
+    the env exists on this machine; ``(env_name, None)`` when declared but
+    not found (caller logs); ``(None, None)`` when no binding is set.
+    """
+    if not filename:
+        return None, None
+    try:
+        reader = PyProjectReader.from_filename(filename)
+    except Exception as e:
+        LOGGER.debug("Failed to read inline metadata for conda env: %s", e)
+        return None, None
+
+    name = reader.conda_environment
+    if not name:
+        return None, None
+
+    env = find_environment_by_name(name)
+    if env is None:
+        LOGGER.warning(
+            "Notebook declares conda env '%s' but it was not found on this "
+            "machine; falling back to default kernel python.",
+            name,
+        )
+        return None, None
+
+    return name, conda_env_python_path(env)
+
+
+def _conda_run_prefix(env_name: str) -> list[str]:
+    """Return the ``conda run`` prefix for the active conda-family binary.
+
+    ``--no-capture-output`` is required so the kernel's KERNEL_READY
+    handshake on stdout reaches the parent process unbuffered.
+    """
+    binary = _preferred_conda_family_manager()
+    return [binary, "run", "--no-capture-output", "-n", env_name]
 
 
 class KernelStartupError(Exception):
@@ -220,6 +269,12 @@ class IPCKernelManagerImpl(KernelManager):
             parent_pid=os.getpid(),
         )
 
+        # If the notebook declares a conda env via [tool.marimo.conda_environment],
+        # that takes precedence over [tool.marimo.venv] / ephemeral sandbox.
+        conda_env_name, conda_python = _resolve_conda_env(
+            self.app_metadata.filename
+        )
+
         venv_config = _get_venv_config(self.config_manager)
         try:
             configured_python = get_configured_venv_python(
@@ -234,9 +289,29 @@ class IPCKernelManagerImpl(KernelManager):
         is_ephemeral_sandbox = False
         kernel_pythonpath: str | None = None
 
-        # An explicitly configured venv takes precedence over an ephemeral
-        # sandbox.
-        if configured_python:
+        # A conda env binding takes precedence over both configured and
+        # ephemeral sandboxes.
+        if conda_python is not None:
+            echo(
+                f"Using conda env: {muted(conda_env_name or '?')}",
+                err=True,
+            )
+            venv_python = conda_python
+            writable = False
+            if not has_marimo_installed(venv_python):
+                if not check_python_version_compatibility(venv_python):
+                    raise KernelStartupError(
+                        f"marimo is not installed in conda env "
+                        f"'{conda_env_name}', and the env's Python is "
+                        f"binary-incompatible with this marimo install.\n\n"
+                        f"Install marimo into the env, then reopen the "
+                        f"notebook:\n"
+                        f"  conda install -n {conda_env_name} -c conda-forge marimo\n"
+                        f"  # or: conda run -n {conda_env_name} pip install marimo"
+                    )
+                # Best-effort: surface marimo from the current runtime.
+                kernel_pythonpath = get_kernel_pythonpath()
+        elif configured_python:
             echo(
                 f"Using configured venv: {muted(configured_python)}",
                 err=True,
@@ -312,6 +387,12 @@ class IPCKernelManagerImpl(KernelManager):
         )
 
         cmd = [venv_python, "-m", "marimo._ipc.launch_kernel"]
+
+        # Wrap with `conda run -n <env>` so the env's activation hooks fire
+        # (PATH, LD_LIBRARY_PATH, CONDA_PREFIX) — critical for packages with
+        # native deps like CUDA/MKL.
+        if conda_env_name is not None:
+            cmd = _conda_run_prefix(conda_env_name) + cmd
 
         LOGGER.debug(f"Launching kernel: {' '.join(cmd)}")
 

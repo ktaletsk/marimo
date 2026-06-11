@@ -232,3 +232,96 @@ class TestConstructKernelEnv:
         )
         assert "UV_PROJECT_ENVIRONMENT" in base
         assert "VIRTUAL_ENV" not in base
+
+
+class TestResolveCondaEnv:
+    def test_returns_none_when_no_filename(self) -> None:
+        from marimo._session.managers.ipc import _resolve_conda_env
+
+        assert _resolve_conda_env(None) == (None, None)
+        assert _resolve_conda_env("") == (None, None)
+
+    def test_returns_none_when_no_binding_in_notebook(
+        self, tmp_path: Path
+    ) -> None:
+        from marimo._session.managers.ipc import _resolve_conda_env
+
+        nb = tmp_path / "nb.py"
+        nb.write_text("import marimo as mo\n", encoding="utf-8")
+        assert _resolve_conda_env(str(nb)) == (None, None)
+
+    def test_returns_none_when_env_missing_on_machine(
+        self, tmp_path: Path
+    ) -> None:
+        from unittest.mock import patch
+
+        from marimo._session.managers.ipc import _resolve_conda_env
+
+        nb = tmp_path / "nb.py"
+        nb.write_text(
+            "# /// script\n"
+            "# [tool.marimo]\n"
+            '# conda_environment = "ghost-env"\n'
+            "# ///\n\n"
+            "import marimo as mo\n",
+            encoding="utf-8",
+        )
+        with patch(
+            "marimo._session.managers.ipc.find_environment_by_name",
+            return_value=None,
+        ):
+            assert _resolve_conda_env(str(nb)) == (None, None)
+
+    def test_returns_python_path_when_env_exists(self, tmp_path: Path) -> None:
+        from unittest.mock import patch
+
+        from marimo._runtime.packages.conda_environments import (
+            CondaEnvironment,
+        )
+        from marimo._session.managers.ipc import _resolve_conda_env
+
+        nb = tmp_path / "nb.py"
+        nb.write_text(
+            "# /// script\n"
+            "# [tool.marimo]\n"
+            '# conda_environment = "marimo-qa"\n'
+            "# ///\n\n"
+            "import marimo as mo\n",
+            encoding="utf-8",
+        )
+        env_dir = tmp_path / "envs" / "marimo-qa"
+        (env_dir / "bin").mkdir(parents=True)
+        (env_dir / "bin" / "python").touch()
+
+        env = CondaEnvironment(
+            name="marimo-qa", path=str(env_dir), is_active=False
+        )
+        with patch(
+            "marimo._session.managers.ipc.find_environment_by_name",
+            return_value=env,
+        ):
+            name, python_path = _resolve_conda_env(str(nb))
+
+        assert name == "marimo-qa"
+        assert python_path == str(env_dir / "bin" / "python")
+
+
+class TestCondaRunPrefix:
+    def test_uses_preferred_binary(self) -> None:
+        from unittest.mock import patch
+
+        from marimo._session.managers.ipc import _conda_run_prefix
+
+        with patch(
+            "marimo._session.managers.ipc._preferred_conda_family_manager",
+            return_value="mamba",
+        ):
+            prefix = _conda_run_prefix("marimo-qa")
+
+        assert prefix == [
+            "mamba",
+            "run",
+            "--no-capture-output",
+            "-n",
+            "marimo-qa",
+        ]
