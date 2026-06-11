@@ -2745,30 +2745,7 @@ export interface paths {
       };
     };
     put?: never;
-    post: {
-      parameters: {
-        query?: never;
-        header?: never;
-        path?: never;
-        cookie?: never;
-      };
-      requestBody?: {
-        content: {
-          "application/json": components["schemas"]["SetNotebookCondaEnvironmentRequest"];
-        };
-      };
-      responses: {
-        /** @description Bind the current notebook to a conda env */
-        200: {
-          headers: {
-            [name: string]: unknown;
-          };
-          content: {
-            "application/json": components["schemas"]["PackageOperationResponse"];
-          };
-        };
-      };
-    };
+    post?: never;
     delete?: never;
     options?: never;
     head?: never;
@@ -6197,16 +6174,6 @@ export interface components {
       name: string;
       /** @enum {unknown} */
       type: "set-name";
-    };
-    /**
-     * SetNotebookCondaEnvironmentRequest
-     * @description Bind (or unbind) the current notebook to a conda env.
-     *
-     *         ``None`` clears the binding (the kernel falls back to the system
-     *         Python / whatever the parent shell provides).
-     */
-    SetNotebookCondaEnvironmentRequest: {
-      environment: string | null;
     };
     /** SetupRootError */
     SetupRootError: {

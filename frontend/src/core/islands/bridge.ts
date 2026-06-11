@@ -258,9 +258,7 @@ export class IslandsPyodideBridge implements RunRequests, EditRequests {
   removePackage = throwNotImplemented;
   getPackageList = throwNotImplemented;
   getDependencyTree = throwNotImplemented;
-  listCondaEnvironments = throwNotImplemented;
   getNotebookCondaEnvironment = throwNotImplemented;
-  setNotebookCondaEnvironment = throwNotImplemented;
   getRecentFiles = throwNotImplemented;
   getWorkspaceFiles = throwNotImplemented;
   getRunningNotebooks = throwNotImplemented;

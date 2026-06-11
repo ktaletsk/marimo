@@ -23,13 +23,9 @@ from marimo._server.models.packages import (
     ListPackagesResponse,
     PackageOperationResponse,
     RemovePackageRequest,
-    SetNotebookCondaEnvironmentRequest,
 )
 from marimo._server.router import APIRouter
-from marimo._utils.inline_script_metadata import (
-    PyProjectReader,
-    update_marimo_tool_in_script,
-)
+from marimo._utils.inline_script_metadata import PyProjectReader
 
 if TYPE_CHECKING:
     from starlette.requests import Request
@@ -238,42 +234,10 @@ async def get_notebook_conda_environment(
     )
 
 
-@router.post("/conda_environment")
-@requires("edit")
-async def set_notebook_conda_environment(
-    request: Request,
-) -> PackageOperationResponse:
-    """
-    requestBody:
-        content:
-            application/json:
-                schema:
-                    $ref: "#/components/schemas/SetNotebookCondaEnvironmentRequest"
-    responses:
-        200:
-            description: Bind the current notebook to a conda env
-            content:
-                application/json:
-                    schema:
-                        $ref: "#/components/schemas/PackageOperationResponse"
-    """
-    body = await parse_request(request, cls=SetNotebookCondaEnvironmentRequest)
-    filename = _get_filename(request)
-    if filename is None:
-        return PackageOperationResponse.of_failure(
-            "Cannot bind a conda environment: no notebook file is open."
-        )
-
-    ok = await asyncio.to_thread(
-        update_marimo_tool_in_script,
-        filename,
-        conda_environment=body.environment,
-    )
-    if not ok:
-        return PackageOperationResponse.of_failure(
-            f"Failed to update conda environment binding in {filename}."
-        )
-    return PackageOperationResponse.of_success()
+# NOTE: There is intentionally no POST endpoint to mutate the binding.
+# Conda envs are managed by the user via conda/mamba; marimo only
+# observes the declaration in the notebook's PEP 723 block. Programmatic
+# updates can use ``update_marimo_tool_in_script`` directly.
 
 
 def _get_package_manager(request: Request) -> PackageManager:

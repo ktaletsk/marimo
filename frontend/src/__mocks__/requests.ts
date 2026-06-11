@@ -72,15 +72,9 @@ export const MockRequestClient = {
       removePackage: vi.fn().mockResolvedValue({}),
       getPackageList: vi.fn().mockResolvedValue({ packages: [] }),
       getDependencyTree: vi.fn().mockResolvedValue({}),
-      listCondaEnvironments: vi
-        .fn()
-        .mockResolvedValue({ environments: [] }),
       getNotebookCondaEnvironment: vi
         .fn()
         .mockResolvedValue({ environment: null, channels: [] }),
-      setNotebookCondaEnvironment: vi
-        .fn()
-        .mockResolvedValue({ success: true, error: null }),
       listSecretKeys: vi.fn().mockResolvedValue({ keys: [] }),
       writeSecret: vi.fn().mockResolvedValue({}),
       invokeAiTool: vi.fn().mockResolvedValue({}),

@@ -384,7 +384,6 @@ def _generate_server_api_schema() -> dict[str, Any]:
         CondaEnvironment,
         packages.ListCondaEnvironmentsResponse,
         packages.GetNotebookCondaEnvironmentResponse,
-        packages.SetNotebookCondaEnvironmentRequest,
         lsp.LspHealthResponse,
         lsp.LspRestartRequest,
         lsp.LspRestartResponse,

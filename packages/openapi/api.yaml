@@ -4540,19 +4540,6 @@ components:
       - name
       title: SetName
       type: object
-    SetNotebookCondaEnvironmentRequest:
-      description: "Bind (or unbind) the current notebook to a conda env.\n\n    ``None``\
-        \ clears the binding (the kernel falls back to the system\n    Python / whatever\
-        \ the parent shell provides)."
-      properties:
-        environment:
-          anyOf:
-          - type: string
-          - type: 'null'
-      required:
-      - environment
-      title: SetNotebookCondaEnvironmentRequest
-      type: object
     SetupRootError:
       properties:
         edges_with_vars:
@@ -6802,19 +6789,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/GetNotebookCondaEnvironmentResponse'
           description: The conda binding declared in the current notebook
-    post:
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/SetNotebookCondaEnvironmentRequest'
-      responses:
-        200:
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/PackageOperationResponse'
-          description: Bind the current notebook to a conda env
   /api/packages/conda_environments:
     get:
       responses:

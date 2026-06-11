@@ -49,13 +49,8 @@ export type AddPackageRequest = schemas["AddPackageRequest"];
 export type RemovePackageRequest = schemas["RemovePackageRequest"];
 export type ListPackagesResponse = schemas["ListPackagesResponse"];
 export type DependencyTreeResponse = schemas["DependencyTreeResponse"];
-export type CondaEnvironment = schemas["CondaEnvironment"];
-export type ListCondaEnvironmentsResponse =
-  schemas["ListCondaEnvironmentsResponse"];
 export type GetNotebookCondaEnvironmentResponse =
   schemas["GetNotebookCondaEnvironmentResponse"];
-export type SetNotebookCondaEnvironmentRequest =
-  schemas["SetNotebookCondaEnvironmentRequest"];
 export type DependencyTreeNode = schemas["DependencyTreeNode"];
 
 export type PackageOperationResponse = schemas["PackageOperationResponse"];
@@ -210,13 +205,7 @@ export interface EditRequests {
     request: RemovePackageRequest,
   ) => Promise<PackageOperationResponse>;
   // Conda env requests
-  listCondaEnvironments: (opts?: {
-    refresh?: boolean;
-  }) => Promise<ListCondaEnvironmentsResponse>;
   getNotebookCondaEnvironment: () => Promise<GetNotebookCondaEnvironmentResponse>;
-  setNotebookCondaEnvironment: (
-    request: SetNotebookCondaEnvironmentRequest,
-  ) => Promise<PackageOperationResponse>;
   // Secrets requests
   listSecretKeys: (request: ListSecretKeysRequest) => Promise<null>;
   writeSecret: (request: CreateSecretRequest) => Promise<null>;

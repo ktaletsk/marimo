@@ -10,3 +10,4 @@ the Python dependencies of your notebooks.
 | [Inlining dependencies](inlining_dependencies.md)     | Create self-contained notebooks by inlining dependencies in notebook files                      |
 | [Notebooks in existing projects](notebooks_in_projects.md)     | Working with marimo notebooks in existing Python projects                      |
 | [Using uv](using_uv.md)     | A guide to using the uv package manager with marimo                     |
+| [Using conda environments](using_conda.md)     | Running marimo notebooks inside an existing conda/mamba/micromamba env                     |

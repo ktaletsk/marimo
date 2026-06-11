@@ -44,16 +44,6 @@ class ListCondaEnvironmentsResponse(msgspec.Struct, rename="camel"):
     environments: list[CondaEnvironment]
 
 
-class SetNotebookCondaEnvironmentRequest(msgspec.Struct, rename="camel"):
-    """Bind (or unbind) the current notebook to a conda env.
-
-    ``None`` clears the binding (the kernel falls back to the system
-    Python / whatever the parent shell provides).
-    """
-
-    environment: str | None
-
-
 class GetNotebookCondaEnvironmentResponse(msgspec.Struct, rename="camel"):
     """The conda binding currently declared in the notebook file."""
 

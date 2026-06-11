@@ -911,3 +911,36 @@ def test_resolve_sandbox_mode_no_conda_binding_unchanged(
     script_path.write_text("import marimo as mo\n", encoding="utf-8")
     result = resolve_sandbox_mode(sandbox=None, name=str(script_path))
     assert result is None
+
+
+def test_resolve_sandbox_mode_relative_path_detects_conda_binding(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`marimo edit foo.py` (relative) must detect the binding as well
+    as `marimo edit /abs/foo.py`. Regression caught in option-B QA: the
+    relative-path code path was silently failing the binding check, so
+    SandboxMode resolved to None and the kernel ran single-process."""
+    script_path = tmp_path / "nb.py"
+    script_path.write_text(
+        """# /// script
+# [tool.marimo]
+# conda_environment = "marimo-qa"
+# ///
+
+import marimo as mo
+""",
+        encoding="utf-8",
+    )
+
+    monkeypatch.chdir(tmp_path)
+    assert (
+        resolve_sandbox_mode(sandbox=None, name="nb.py") is SandboxMode.MULTI
+    )
+
+
+def test_notebook_declares_conda_env_handles_missing_file() -> None:
+    """A non-existent path returns False rather than raising."""
+    from marimo._cli.sandbox import _notebook_declares_conda_env
+
+    assert _notebook_declares_conda_env("/tmp/does-not-exist-xyz.py") is False
+    assert _notebook_declares_conda_env("") is False

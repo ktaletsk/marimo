@@ -140,10 +140,21 @@ def resolve_sandbox_mode(
 
 
 def _notebook_declares_conda_env(name: str) -> bool:
-    """True iff the notebook file has [tool.marimo.conda_environment]."""
+    """True iff the notebook file has [tool.marimo.conda_environment].
+
+    Absolutifies the path first — ``marimo edit foo.py`` from a project
+    directory should detect the binding the same way as
+    ``marimo edit /abs/path/foo.py`` does. Relative path parsing in the
+    PyProjectReader stack proved brittle in QA.
+    """
+    if not name:
+        return False
     try:
+        path = name if os.path.isabs(name) else os.path.abspath(name)
+        if not os.path.isfile(path):
+            return False
         return (
-            PyProjectReader.from_filename(name).conda_environment is not None
+            PyProjectReader.from_filename(path).conda_environment is not None
         )
     except Exception:
         return False
