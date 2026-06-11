@@ -791,9 +791,19 @@ def test_pixi_list_packages_uses_utf8_encoding(mock_run: MagicMock):
 # CondaCliPackageManager tests
 
 
+def _resolve_to(binary: str | None):
+    """Force CondaCliPackageManager._resolve_binary to return ``binary``."""
+    return patch.object(
+        CondaCliPackageManager, "_resolve_binary", return_value=binary
+    )
+
+
 def test_conda_install_command_no_active_env() -> None:
     pm = CondaCliPackageManager()
-    with patch.dict("os.environ", {}, clear=False) as env:
+    with (
+        _resolve_to("conda"),
+        patch.dict("os.environ", {}, clear=False) as env,
+    ):
         env.pop("CONDA_DEFAULT_ENV", None)
         cmd = pm.install_command("numpy", upgrade=False)
     assert cmd == ["conda", "install", "-y", "numpy"]
@@ -801,16 +811,33 @@ def test_conda_install_command_no_active_env() -> None:
 
 def test_conda_install_command_with_active_env() -> None:
     pm = CondaCliPackageManager()
-    with patch.dict("os.environ", {"CONDA_DEFAULT_ENV": "myenv"}):
+    with (
+        _resolve_to("conda"),
+        patch.dict("os.environ", {"CONDA_DEFAULT_ENV": "myenv"}),
+    ):
         cmd = pm.install_command("numpy pandas", upgrade=False)
     assert cmd == ["conda", "install", "-n", "myenv", "-y", "numpy", "pandas"]
 
 
 def test_conda_install_command_upgrade_uses_update() -> None:
     pm = CondaCliPackageManager()
-    with patch.dict("os.environ", {"CONDA_DEFAULT_ENV": "myenv"}):
+    with (
+        _resolve_to("conda"),
+        patch.dict("os.environ", {"CONDA_DEFAULT_ENV": "myenv"}),
+    ):
         cmd = pm.install_command("numpy", upgrade=True)
     assert cmd == ["conda", "update", "-n", "myenv", "-y", "numpy"]
+
+
+def test_conda_install_command_falls_back_to_mamba() -> None:
+    """When only mamba is on PATH, the "conda" manager uses it."""
+    pm = CondaCliPackageManager()
+    with (
+        _resolve_to("mamba"),
+        patch.dict("os.environ", {"CONDA_DEFAULT_ENV": "myenv"}),
+    ):
+        cmd = pm.install_command("numpy", upgrade=False)
+    assert cmd == ["mamba", "install", "-n", "myenv", "-y", "numpy"]
 
 
 async def test_conda_uninstall_command() -> None:
@@ -825,6 +852,7 @@ async def test_conda_uninstall_command() -> None:
         return True
 
     with (
+        _resolve_to("conda"),
         patch.dict("os.environ", {"CONDA_DEFAULT_ENV": "myenv"}),
         patch.object(pm, "run", side_effect=fake_run),
     ):
@@ -845,7 +873,7 @@ def test_conda_list_packages() -> None:
         ]
     )
     with (
-        patch.object(pm, "is_manager_installed", return_value=True),
+        _resolve_to("conda"),
         patch(
             "marimo._runtime.packages.conda_package_manager.subprocess.run"
         ) as mock_run,
@@ -866,7 +894,7 @@ def test_conda_list_packages() -> None:
 def test_conda_list_packages_returns_empty_on_failure() -> None:
     pm = CondaCliPackageManager()
     with (
-        patch.object(pm, "is_manager_installed", return_value=True),
+        _resolve_to("conda"),
         patch(
             "marimo._runtime.packages.conda_package_manager.subprocess.run",
             side_effect=__import__("subprocess").CalledProcessError(
@@ -877,9 +905,9 @@ def test_conda_list_packages_returns_empty_on_failure() -> None:
         assert pm.list_packages() == []
 
 
-def test_conda_list_packages_returns_empty_when_not_installed() -> None:
+def test_conda_list_packages_returns_empty_when_no_binary() -> None:
     pm = CondaCliPackageManager()
-    with patch.object(pm, "is_manager_installed", return_value=False):
+    with _resolve_to(None):
         assert pm.list_packages() == []
 
 
@@ -893,7 +921,10 @@ def test_conda_module_to_package_uses_conda_mapping() -> None:
 
 def test_mamba_install_command_uses_mamba_binary() -> None:
     pm = MambaPackageManager()
-    with patch.dict("os.environ", {"CONDA_DEFAULT_ENV": "myenv"}):
+    with (
+        _resolve_to("mamba"),
+        patch.dict("os.environ", {"CONDA_DEFAULT_ENV": "myenv"}),
+    ):
         cmd = pm.install_command("numpy", upgrade=False)
     assert cmd == ["mamba", "install", "-n", "myenv", "-y", "numpy"]
 
@@ -904,9 +935,19 @@ def test_mamba_uses_conda_module_mapping() -> None:
     assert pm.module_to_package("cv2") == "opencv"
 
 
+def test_mamba_does_not_fall_back_to_conda() -> None:
+    """Mamba-class restricts to the mamba binary only — picking the
+    'mamba' manager is an explicit choice, no silent substitution."""
+    pm = MambaPackageManager()
+    assert pm._binary_candidates == ("mamba",)
+
+
 def test_micromamba_install_command_uses_micromamba_binary() -> None:
     pm = MicromambaPackageManager()
-    with patch.dict("os.environ", {"CONDA_DEFAULT_ENV": "myenv"}):
+    with (
+        _resolve_to("micromamba"),
+        patch.dict("os.environ", {"CONDA_DEFAULT_ENV": "myenv"}),
+    ):
         cmd = pm.install_command("numpy", upgrade=True)
     assert cmd == ["micromamba", "update", "-n", "myenv", "-y", "numpy"]
 
@@ -923,6 +964,7 @@ async def test_mamba_uninstall_uses_mamba_binary() -> None:
         return True
 
     with (
+        _resolve_to("mamba"),
         patch.dict("os.environ", {"CONDA_DEFAULT_ENV": "myenv"}),
         patch.object(pm, "run", side_effect=fake_run),
     ):

@@ -33,11 +33,40 @@ class CondaCliPackageManager(CondaPackageManager):
     Operates on the currently active conda environment (as inferred from
     ``CONDA_DEFAULT_ENV``); does not provision new environments.
 
-    Subclasses select a different binary by overriding ``name`` (which is
-    also the binary looked up on ``PATH``).
+    The user-visible ``name`` is the manager selected in settings; the
+    *binary* actually executed is resolved at call-time from the
+    conda-family candidates that subclasses declare. This lets a user
+    pick "conda" on a mambaforge install where ``conda`` is only a shell
+    alias and have things still work — mamba is API-compatible for the
+    subcommands marimo uses.
     """
 
     name = "conda"
+
+    # Binaries to try in order. Subclasses constrain this list to enforce
+    # a specific binary (e.g. MambaPackageManager forces mamba only).
+    _binary_candidates: tuple[str, ...] = ("conda", "mamba", "micromamba")
+
+    def _resolve_binary(self) -> str | None:
+        """First available binary in ``_binary_candidates``, or ``None``."""
+        from marimo._dependencies.dependencies import DependencyManager
+
+        for candidate in self._binary_candidates:
+            if DependencyManager.which(candidate):
+                return candidate
+        return None
+
+    def is_manager_installed(self) -> bool:
+        if self._resolve_binary() is not None:
+            return True
+        from marimo._dependencies.dependencies import DependencyManager
+
+        # Avoid the misleading "{name} is not available" log when none of
+        # the candidates are installed — the alert UI carries a clearer
+        # message. Keep the standard path for single-binary subclasses.
+        if len(self._binary_candidates) == 1:
+            return bool(DependencyManager.which(self._binary_candidates[0]))
+        return False
 
     def _env_args(self) -> list[str]:
         env = os.environ.get("CONDA_DEFAULT_ENV")
@@ -48,9 +77,10 @@ class CondaCliPackageManager(CondaPackageManager):
     ) -> list[str]:
         # The `group` parameter is accepted for interface compatibility, but is ignored.
         del group
+        binary = self._resolve_binary() or self._binary_candidates[0]
         subcommand = "update" if upgrade else "install"
         return [
-            self.name,
+            binary,
             subcommand,
             *self._env_args(),
             "-y",
@@ -60,9 +90,10 @@ class CondaCliPackageManager(CondaPackageManager):
     async def uninstall(self, package: str, group: str | None = None) -> bool:
         # The `group` parameter is accepted for interface compatibility, but is ignored.
         del group
+        binary = self._resolve_binary() or self._binary_candidates[0]
         return await self.run(
             [
-                self.name,
+                binary,
                 "remove",
                 *self._env_args(),
                 "-y",
@@ -72,12 +103,13 @@ class CondaCliPackageManager(CondaPackageManager):
         )
 
     def list_packages(self) -> list[PackageDescription]:
-        if not self.is_manager_installed():
+        binary = self._resolve_binary()
+        if binary is None:
             return []
 
         try:
             proc = subprocess.run(
-                [self.name, "list", *self._env_args(), "--json"],
+                [binary, "list", *self._env_args(), "--json"],
                 capture_output=True,
                 text=True,
                 encoding="utf-8",
@@ -99,12 +131,14 @@ class MambaPackageManager(CondaCliPackageManager):
     """
 
     name = "mamba"
+    _binary_candidates = ("mamba",)
 
 
 class MicromambaPackageManager(CondaCliPackageManager):
     """Manages packages with the ``micromamba`` CLI."""
 
     name = "micromamba"
+    _binary_candidates = ("micromamba",)
 
 
 class PixiPackageManager(CondaPackageManager):
