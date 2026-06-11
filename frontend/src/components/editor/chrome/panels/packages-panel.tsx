@@ -121,33 +121,37 @@ const PackagesPanel: React.FC = () => {
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
       <InstallPackageForm packageManager={packageManager} onSuccess={refetch} />
-      {isTreeSupported && (
+      {(isTreeSupported || showCondaLabel) && (
         <div className="flex items-center justify-between px-2 py-1 border-b">
           <div className="flex gap-1">
-            <button
-              type="button"
-              className={cn(
-                "px-2 py-1 text-xs rounded",
-                viewMode === "list"
-                  ? "bg-accent text-accent-foreground"
-                  : "text-muted-foreground hover:text-foreground",
-              )}
-              onClick={() => setUserViewMode("list")}
-            >
-              List
-            </button>
-            <button
-              type="button"
-              className={cn(
-                "px-2 py-1 text-xs rounded",
-                viewMode === "tree"
-                  ? "bg-accent text-accent-foreground"
-                  : "text-muted-foreground hover:text-foreground",
-              )}
-              onClick={() => setUserViewMode("tree")}
-            >
-              Tree
-            </button>
+            {isTreeSupported && (
+              <>
+                <button
+                  type="button"
+                  className={cn(
+                    "px-2 py-1 text-xs rounded",
+                    viewMode === "list"
+                      ? "bg-accent text-accent-foreground"
+                      : "text-muted-foreground hover:text-foreground",
+                  )}
+                  onClick={() => setUserViewMode("list")}
+                >
+                  List
+                </button>
+                <button
+                  type="button"
+                  className={cn(
+                    "px-2 py-1 text-xs rounded",
+                    viewMode === "tree"
+                      ? "bg-accent text-accent-foreground"
+                      : "text-muted-foreground hover:text-foreground",
+                  )}
+                  onClick={() => setUserViewMode("tree")}
+                >
+                  Tree
+                </button>
+              </>
+            )}
           </div>
           <div className="flex items-center gap-2">
             {showCondaLabel ? (
