@@ -306,22 +306,47 @@ class TestResolveCondaEnv:
         assert python_path == str(env_dir / "bin" / "python")
 
 
-class TestCondaRunPrefix:
-    def test_uses_preferred_binary(self) -> None:
-        from unittest.mock import patch
+class TestApplyCondaActivationEnv:
+    def test_sets_conda_prefix_and_default_env(self) -> None:
+        from marimo._session.managers.ipc import _apply_conda_activation_env
 
-        from marimo._session.managers.ipc import _conda_run_prefix
+        env: dict[str, str] = {"PATH": "/usr/bin"}
+        _apply_conda_activation_env(
+            env,
+            env_name="marimo-qa",
+            env_python="/home/u/mamba/envs/marimo-qa/bin/python",
+        )
 
-        with patch(
-            "marimo._session.managers.ipc._preferred_conda_family_manager",
-            return_value="mamba",
-        ):
-            prefix = _conda_run_prefix("marimo-qa")
+        assert env["CONDA_DEFAULT_ENV"] == "marimo-qa"
+        assert env["CONDA_PREFIX"] == "/home/u/mamba/envs/marimo-qa"
+        assert (
+            env["CONDA_PYTHON_EXE"]
+            == "/home/u/mamba/envs/marimo-qa/bin/python"
+        )
 
-        assert prefix == [
-            "mamba",
-            "run",
-            "--no-capture-output",
-            "-n",
-            "marimo-qa",
-        ]
+    def test_prepends_bin_dir_to_path(self) -> None:
+        import os
+
+        from marimo._session.managers.ipc import _apply_conda_activation_env
+
+        env: dict[str, str] = {"PATH": "/usr/bin"}
+        _apply_conda_activation_env(
+            env,
+            env_name="marimo-qa",
+            env_python="/home/u/mamba/envs/marimo-qa/bin/python",
+        )
+
+        assert env["PATH"].startswith("/home/u/mamba/envs/marimo-qa/bin")
+        assert env["PATH"].endswith(f"{os.pathsep}/usr/bin")
+
+    def test_handles_empty_existing_path(self) -> None:
+        from marimo._session.managers.ipc import _apply_conda_activation_env
+
+        env: dict[str, str] = {}
+        _apply_conda_activation_env(
+            env,
+            env_name="marimo-qa",
+            env_python="/home/u/mamba/envs/marimo-qa/bin/python",
+        )
+
+        assert env["PATH"] == "/home/u/mamba/envs/marimo-qa/bin"

@@ -21,7 +21,6 @@ from marimo._cli.sandbox import (
 )
 from marimo._config.config import VenvConfig
 from marimo._config.manager import MarimoConfigReader
-from marimo._config.packages import _preferred_conda_family_manager
 from marimo._config.settings import GLOBAL_SETTINGS
 from marimo._messaging.types import KernelMessage
 from marimo._runtime import commands
@@ -93,14 +92,41 @@ def _resolve_conda_env(
     return name, conda_env_python_path(env)
 
 
-def _conda_run_prefix(env_name: str) -> list[str]:
-    """Return the ``conda run`` prefix for the active conda-family binary.
+def _apply_conda_activation_env(
+    env: dict[str, str], env_name: str, env_python: str
+) -> None:
+    """Set the env vars `conda activate` would, in-place.
 
-    ``--no-capture-output`` is required so the kernel's KERNEL_READY
-    handshake on stdout reaches the parent process unbuffered.
+    We avoid actually shelling out to ``conda run`` / ``mamba run``:
+    mamba's wrapper script trips over bash 3.2's ``exec`` (macOS), and
+    its output buffering breaks the KERNEL_READY handshake. Setting the
+    standard activation vars directly covers the cases packages
+    typically depend on.
+
+    Limitation: env-specific ``etc/conda/activate.d`` scripts are not
+    executed. Packages that rely on them (some CUDA / proprietary
+    toolchains) may need additional setup.
     """
-    binary = _preferred_conda_family_manager()
-    return [binary, "run", "--no-capture-output", "-n", env_name]
+    # `env_python` lives at <env_path>/bin/python (POSIX) or
+    # <env_path>/python.exe (Windows). The env path is one or two parents up.
+    python_path = Path(env_python)
+    if python_path.parent.name == "bin":
+        env_path = python_path.parent.parent
+    else:
+        env_path = python_path.parent
+
+    env["CONDA_PREFIX"] = str(env_path)
+    env["CONDA_DEFAULT_ENV"] = env_name
+    env["CONDA_PYTHON_EXE"] = env_python
+
+    # Prepend the env's bin dir to PATH so native libs ship as expected.
+    bin_dir = env_path / ("Scripts" if sys.platform == "win32" else "bin")
+    existing_path = env.get("PATH", "")
+    env["PATH"] = (
+        f"{bin_dir}{os.pathsep}{existing_path}"
+        if existing_path
+        else str(bin_dir)
+    )
 
 
 class KernelStartupError(Exception):
@@ -386,13 +412,16 @@ class IPCKernelManagerImpl(KernelManager):
             kernel_pythonpath=kernel_pythonpath,
         )
 
-        cmd = [venv_python, "-m", "marimo._ipc.launch_kernel"]
+        # For conda envs, set the activation env vars manually instead of
+        # wrapping with `conda run` / `mamba run`. mamba's `run` builds a
+        # temp shell script that uses `exec --`, which bash 3.2 (macOS
+        # default) rejects. And `--no-capture-output` is conda-specific
+        # anyway. This covers the env-var subset that 99% of packages
+        # care about; activate.d scripts won't fire (documented gap).
+        if conda_env_name is not None and conda_python is not None:
+            _apply_conda_activation_env(env, conda_env_name, conda_python)
 
-        # Wrap with `conda run -n <env>` so the env's activation hooks fire
-        # (PATH, LD_LIBRARY_PATH, CONDA_PREFIX) — critical for packages with
-        # native deps like CUDA/MKL.
-        if conda_env_name is not None:
-            cmd = _conda_run_prefix(conda_env_name) + cmd
+        cmd = [venv_python, "-m", "marimo._ipc.launch_kernel"]
 
         LOGGER.debug(f"Launching kernel: {' '.join(cmd)}")
 
