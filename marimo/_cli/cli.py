@@ -548,9 +548,16 @@ def edit(
                 "marimo[sandbox]",
             )
 
-        # Enable script metadata management for sandboxed notebooks
-        os.environ["MARIMO_MANAGE_SCRIPT_METADATA"] = "true"
-        GLOBAL_SETTINGS.MANAGE_SCRIPT_METADATA = True
+        # Enable script metadata management for sandboxed notebooks — except
+        # when the notebook targets an existing conda env. Conda envs have
+        # their own source of truth (the env), and the manage-script-metadata
+        # path force-overrides the user's manager to "uv" (start.py:284).
+        # That would silently undo the user's conda/mamba selection.
+        from marimo._cli.sandbox import _notebook_declares_conda_env
+
+        if not (name and _notebook_declares_conda_env(name)):
+            os.environ["MARIMO_MANAGE_SCRIPT_METADATA"] = "true"
+            GLOBAL_SETTINGS.MANAGE_SCRIPT_METADATA = True
 
     # Check shared memory availability early (required for edit mode to
     # communicate between the server process and kernel subprocess)
