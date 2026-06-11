@@ -397,10 +397,12 @@ const PackageManagerForm: React.FC = () => {
     if (Object.keys(dirtyValues).length === 0) {
       return; // Nothing changed
     }
-    await saveUserConfig({ config: dirtyValues }).then(() => {
-      // Update local state with form values
-      setConfig((prev) => ({ ...prev, ...values }));
-    });
+    // Update local state synchronously so a quick "Install" click after
+    // changing the manager dropdown uses the picked manager, not the
+    // stale one. The save round-trip happens in the background; on the
+    // rare failure the next save attempt will reconcile.
+    setConfig((prev) => ({ ...prev, ...values }));
+    await saveUserConfig({ config: dirtyValues });
   };
 
   return (

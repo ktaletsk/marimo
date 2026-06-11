@@ -68,24 +68,35 @@ const PackageActionButton: React.FC<{
 const PackagesPanel: React.FC = () => {
   const [config] = useResolvedMarimoConfig();
   const packageManager = config.package_management.manager;
-  const { getDependencyTree, getPackageList } = useRequestClient();
+  const { getDependencyTree, getPackageList, getNotebookCondaEnvironment } =
+    useRequestClient();
 
   const [userViewMode, setUserViewMode] = React.useState<ViewMode | null>(null);
+  const isCondaFamily =
+    packageManager === "conda" ||
+    packageManager === "mamba" ||
+    packageManager === "micromamba";
+
   const {
     data: dependencies,
     error,
     refetch,
     isPending,
   } = useAsyncData(async () => {
-    const [listPackagesResponse, dependencyTreeResponse] = await Promise.all([
-      getPackageList(),
-      getDependencyTree(),
-    ]);
+    const [listPackagesResponse, dependencyTreeResponse, condaEnvResponse] =
+      await Promise.all([
+        getPackageList(),
+        getDependencyTree(),
+        isCondaFamily
+          ? getNotebookCondaEnvironment()
+          : Promise.resolve({ environment: null, channels: [] }),
+      ]);
     return {
       list: listPackagesResponse.packages,
       tree: dependencyTreeResponse.tree,
+      condaEnv: condaEnvResponse.environment,
     };
-  }, [packageManager]);
+  }, [packageManager, isCondaFamily]);
 
   // Only show on the first load
   if (isPending) {
@@ -101,6 +112,11 @@ const PackagesPanel: React.FC = () => {
   const name = dependencies.tree?.name;
   const version = dependencies?.tree?.version;
   const isSandbox = name === "<root>"; // name is the project name otherwise
+
+  // For conda-family managers the binding is what matters, not the
+  // (uv-derived) tree name. Surface it explicitly.
+  const condaEnvName = dependencies.condaEnv;
+  const showCondaLabel = isCondaFamily && condaEnvName !== null;
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
@@ -134,17 +150,33 @@ const PackagesPanel: React.FC = () => {
             </button>
           </div>
           <div className="flex items-center gap-2">
-            <div
-              className="items-center border px-2 py-0.5 text-xs transition-colors focus:outline-hidden focus:ring-2 focus:ring-ring focus:ring-offset-2 text-foreground rounded-sm text-ellipsis block overflow-hidden max-w-fit font-medium"
-              title={isSandbox ? "sandbox" : "project"}
-            >
-              {isSandbox ? "sandbox" : "project"}
-            </div>
-            {name && !isSandbox && (
-              <span className="text-xs text-muted-foreground">
-                {name}
-                {version && ` v${version}`}
+            {showCondaLabel ? (
+              <div
+                className="items-center border px-2 py-0.5 text-xs text-foreground rounded-sm font-medium"
+                title={`conda env: ${condaEnvName}`}
+              >
+                conda env
+              </div>
+            ) : (
+              <div
+                className="items-center border px-2 py-0.5 text-xs transition-colors focus:outline-hidden focus:ring-2 focus:ring-ring focus:ring-offset-2 text-foreground rounded-sm text-ellipsis block overflow-hidden max-w-fit font-medium"
+                title={isSandbox ? "sandbox" : "project"}
+              >
+                {isSandbox ? "sandbox" : "project"}
+              </div>
+            )}
+            {showCondaLabel ? (
+              <span className="text-xs text-muted-foreground font-mono">
+                {condaEnvName}
               </span>
+            ) : (
+              name &&
+              !isSandbox && (
+                <span className="text-xs text-muted-foreground">
+                  {name}
+                  {version && ` v${version}`}
+                </span>
+              )
             )}
           </div>
         </div>
