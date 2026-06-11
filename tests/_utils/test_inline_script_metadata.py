@@ -543,14 +543,34 @@ def test_apply_deletes_key_when_set_to_none() -> None:
     assert reader.conda_channels == ["conda-forge"]
 
 
-def test_apply_drops_empty_tool_marimo_table() -> None:
+def test_apply_drops_empty_script_block_when_no_keys_remain() -> None:
     original = """# /// script
 # [tool.marimo]
 # conda_environment = "marimo-qa"
 # ///
+
+import marimo as mo
 """
     updated = _apply_marimo_tool_updates(original, {"conda_environment": None})
-    # Block should remain but [tool.marimo] is gone.
+    # The empty block should be removed entirely; no `# /// script` husk.
+    assert "# /// script" not in updated
+    assert "tool.marimo" not in updated
+    assert "import marimo as mo" in updated
+
+
+def test_apply_keeps_block_when_other_keys_remain() -> None:
+    original = """# /// script
+# dependencies = ["polars"]
+# [tool.marimo]
+# conda_environment = "marimo-qa"
+# ///
+
+import polars as pl
+"""
+    updated = _apply_marimo_tool_updates(original, {"conda_environment": None})
+    # Block stays — `dependencies` is still there.
+    assert "# /// script" in updated
+    assert 'dependencies = ["polars"]' in updated
     assert "tool.marimo" not in updated
     assert "conda_environment" not in updated
 

@@ -402,17 +402,24 @@ def _apply_marimo_tool_updates(contents: str, updates: dict[str, Any]) -> str:
         return contents
 
     rendered_toml = tomlkit.dumps(toml_doc).rstrip()
+
     if not rendered_toml:
-        # No remaining keys at all — if there was a pre-existing block, we
-        # leave an empty `# /// script\n# ///\n` rather than removing it
-        # (caller likely just deleted the one key they cared about).
-        rendered_block = "# /// script\n# ///"
-    else:
-        rendered_block_lines = ["# /// script"]
-        for line in rendered_toml.split("\n"):
-            rendered_block_lines.append(f"# {line}" if line else "#")
-        rendered_block_lines.append("# ///")
-        rendered_block = "\n".join(rendered_block_lines)
+        # The block ends up empty (last key was deleted). Drop the entire
+        # `# /// script ... # ///` block rather than leaving an empty husk.
+        if match is None:
+            return contents
+        # Eat one trailing newline after `# ///` if present, so we don't
+        # leave a stray blank line at the top of the file.
+        end = match.end()
+        if end < len(contents) and contents[end] == "\n":
+            end += 1
+        return contents[: match.start()] + contents[end:]
+
+    rendered_block_lines = ["# /// script"]
+    for line in rendered_toml.split("\n"):
+        rendered_block_lines.append(f"# {line}" if line else "#")
+    rendered_block_lines.append("# ///")
+    rendered_block = "\n".join(rendered_block_lines)
 
     if match is None:
         # Prepend new block.
