@@ -109,6 +109,17 @@ def resolve_sandbox_mode(
     # Determine if target is a directory (or None = current directory)
     is_directory = name is None or os.path.isdir(name)
 
+    # A notebook that declares [tool.marimo.conda_environment] *must* run
+    # under an IPC kernel — single-process mode can't activate a conda
+    # env. Force MULTI mode silently; the IPC manager picks up the
+    # binding and launches the kernel inside the env.
+    if (
+        not is_directory
+        and name is not None
+        and _notebook_declares_conda_env(name)
+    ):
+        return SandboxMode.MULTI
+
     # When the sandbox flag is omitted we infer whether to
     # start in sandbox mode by examining the notebook file and
     # prompting the user. Only prompt for single notebooks, not directories.
@@ -126,6 +137,16 @@ def resolve_sandbox_mode(
     # Directory or home page -> multi-file sandbox (IPC kernels)
     # Single file -> single-file sandbox (uv run wrapper)
     return SandboxMode.MULTI if is_directory else SandboxMode.SINGLE
+
+
+def _notebook_declares_conda_env(name: str) -> bool:
+    """True iff the notebook file has [tool.marimo.conda_environment]."""
+    try:
+        return (
+            PyProjectReader.from_filename(name).conda_environment is not None
+        )
+    except Exception:
+        return False
 
 
 def _is_versioned(dependency: str) -> bool:

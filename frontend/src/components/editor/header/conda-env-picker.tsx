@@ -6,6 +6,7 @@ import {
   PackageIcon,
   RefreshCwIcon,
 } from "lucide-react";
+import { useSetAtom } from "jotai";
 import { useCallback, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
@@ -18,10 +19,13 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Tooltip } from "@/components/ui/tooltip";
 import { useAsyncData } from "@/hooks/useAsyncData";
+import { connectionAtom } from "@/core/network/connection";
 import { useRequestClient } from "@/core/network/requests";
 import type { CondaEnvironment } from "@/core/network/types";
+import { WebSocketState } from "@/core/websocket/types";
 import { cn } from "@/utils/cn";
 import { Logger } from "@/utils/Logger";
+import { reloadSafe } from "@/utils/reload-safe";
 
 /**
  * Conda environment picker shown in the notebook header.
@@ -41,6 +45,7 @@ export const CondaEnvPicker: React.FC = () => {
     setNotebookCondaEnvironment,
     sendRestart,
   } = useRequestClient();
+  const setConnection = useSetAtom(connectionAtom);
 
   const envsData = useAsyncData(
     () => listCondaEnvironments().then((r) => r.environments),
@@ -92,16 +97,19 @@ export const CondaEnvPicker: React.FC = () => {
       const res = await setNotebookCondaEnvironment({ environment: name });
       if (!res.success) {
         Logger.error("Failed to update conda env binding:", res.error);
+        setPending(false);
         return;
       }
-      await bindingData.refetch();
-      // The kernel must restart for the new env to take effect.
-      // Changing envs destroys notebook state by design; the user just
-      // told us "use a different Python," so we honor that.
+      // The kernel must restart for the new env to take effect, AND the
+      // session itself may need to switch to IPC mode (server only honors
+      // [tool.marimo.conda_environment] in the IPC kernel manager). The
+      // restart endpoint closes the session; reloading the page lets the
+      // server re-resolve sandbox mode from the now-updated notebook file.
+      setConnection({ state: WebSocketState.CLOSING });
       await sendRestart();
+      reloadSafe();
     } catch (e) {
       Logger.error(e);
-    } finally {
       setPending(false);
     }
   };

@@ -874,3 +874,40 @@ def test_resolve_local_path_line() -> None:
     assert _resolve_local_path_line("numpy==1.26.0", d) == "numpy==1.26.0"
     assert _resolve_local_path_line("/absolute/path", d) == "/absolute/path"
     assert _resolve_local_path_line("", d) == ""
+
+
+def test_resolve_sandbox_mode_forces_multi_for_conda_binding(
+    tmp_path: Path,
+) -> None:
+    """A notebook with [tool.marimo.conda_environment] forces MULTI mode.
+
+    Regression: without this, the file falls through to non-IPC kernel
+    manager (single-process via multiprocessing) and the conda binding
+    is silently ignored.
+    """
+    script_path = tmp_path / "nb.py"
+    script_path.write_text(
+        """# /// script
+# [tool.marimo]
+# conda_environment = "marimo-qa"
+# ///
+
+import marimo as mo
+""",
+        encoding="utf-8",
+    )
+
+    # sandbox flag not set; would normally return None for a non-sandbox
+    # plain notebook.
+    result = resolve_sandbox_mode(sandbox=None, name=str(script_path))
+    assert result is SandboxMode.MULTI
+
+
+def test_resolve_sandbox_mode_no_conda_binding_unchanged(
+    tmp_path: Path,
+) -> None:
+    """A notebook without the binding behaves as before."""
+    script_path = tmp_path / "nb.py"
+    script_path.write_text("import marimo as mo\n", encoding="utf-8")
+    result = resolve_sandbox_mode(sandbox=None, name=str(script_path))
+    assert result is None
