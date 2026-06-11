@@ -420,7 +420,24 @@ const PackageManagerForm: React.FC = () => {
                 <FormControl>
                   <NativeSelect
                     data-testid="install-package-manager-select"
-                    onChange={(e) => field.onChange(e.target.value)}
+                    onChange={(e) => {
+                      const next = e.target
+                        .value as (typeof PackageManagerNames)[number];
+                      field.onChange(next);
+                      // Bypass the async zodResolver/handleSubmit gate so a
+                      // user who clicks "Install" right after picking a
+                      // manager sees their choice on the next render.
+                      // Without this, the InstallPackagesButton still reads
+                      // the old userConfig.manager from the previous render
+                      // and sends the wrong manager to the kernel.
+                      setConfig((prev) => ({
+                        ...prev,
+                        package_management: {
+                          ...prev.package_management,
+                          manager: next,
+                        },
+                      }));
+                    }}
                     value={field.value}
                     disabled={field.disabled}
                     className="inline-flex mr-2"
